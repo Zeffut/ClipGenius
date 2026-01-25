@@ -559,8 +559,8 @@ def process_video(job_id: str, url: str, options: dict):
         else:
             logger.log("Sous-titres désactivés", "info", "subtitles", 100)
         
-        # === TERMINÉ ===
-        logger.log("Traitement terminé avec succès!", "success", "complete", 100)
+        # === NOTE: Le message "complete" sera envoyé APRÈS la copie des clips ===
+        # pour éviter que le frontend fetch le status avant que clip_data soit prêt
         
         # === COPIE AUTOMATIQUE VERS DOSSIER TÉLÉCHARGEMENTS ===
         # Détecter le dossier Téléchargements de l'utilisateur (défini ici pour être accessible plus loin)
@@ -688,6 +688,12 @@ def process_video(job_id: str, url: str, options: dict):
             logger.log(f"  Clip {i+1}: {clip['url']} ({clip['size']} MB)", "info", "complete", 100)
         
         jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None}
+        
+        # === TERMINÉ - Envoyer APRÈS mise à jour du job ===
+        # Le frontend va fetch /api/status dès réception de ce message
+        # clip_data doit être prêt AVANT d'envoyer "finished"
+        # NOTE: On utilise "finished" au lieu de "complete" pour distinguer du step de progression
+        logger.log(f"Traitement terminé: {len(clip_data)} clips créés!", "success", "finished", 100)
         
         # === NETTOYAGE IMMÉDIAT D'OUTPUT/ ===
         # Les clips sont maintenant servis depuis ~/Downloads via /clips/

@@ -4359,8 +4359,10 @@
                 
                 saveJobState(jobId, logs, msg.step, currentProgress);
 
-                if (msg.step === 'complete') {
-                    logConnection('🎉 Job terminé (message SSE)');
+                // "finished" = signal final envoyé APRÈS que clip_data soit prêt dans jobs[]
+                // NOTE: On ignore "complete" qui est utilisé pour les logs de progression
+                if (msg.step === 'finished') {
+                    logConnection('🎉 Job terminé avec clips (message SSE)');
                     cleanupAllConnections();
                     
                     // Fetch final status to get clips
