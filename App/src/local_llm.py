@@ -25,6 +25,20 @@ from rich.console import Console
 # Supprimer les warnings ggml_metal pour bf16 (non supporté sur certains GPU)
 logging.getLogger("llama_cpp").setLevel(logging.ERROR)
 
+# URLs de téléchargement des modèles GGUF (sources publiques)
+MODEL_DOWNLOADS = {
+    "phi-4-mini": {
+        "url": "https://huggingface.co/lmstudio-community/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
+        "filename": "Phi-4-mini-instruct-Q4_K_M.gguf",
+        "size_gb": 2.5,  # Taille approximative
+    },
+    "phi-3-mini": {
+        "url": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
+        "filename": "Phi-3-mini-4k-instruct-q4.gguf",
+        "size_gb": 2.2,
+    },
+}
+
 
 def get_optimal_context_size(max_ram_usage_percent: float = 50.0) -> int:
     """
@@ -265,6 +279,96 @@ class LocalLLM:
             return get_optimal_context_size(max_ram_usage_percent=50.0)
 
     @staticmethod
+    def _download_model(model_key: str = "phi-4-mini") -> Optional[str]:
+        """
+        Télécharge automatiquement le modèle GGUF depuis HuggingFace.
+        
+        Args:
+            model_key: Clé du modèle à télécharger ("phi-4-mini" ou "phi-3-mini")
+            
+        Returns:
+            Chemin vers le modèle téléchargé, ou None si échec
+        """
+        import urllib.request
+        import urllib.error
+        import shutil
+        from rich.progress import Progress, DownloadColumn, TransferSpeedColumn, BarColumn, TextColumn
+        
+        if model_key not in MODEL_DOWNLOADS:
+            console.print(f"[red]Modèle inconnu: {model_key}[/red]")
+            return None
+        
+        model_info = MODEL_DOWNLOADS[model_key]
+        url = model_info["url"]
+        filename = model_info["filename"]
+        size_gb = model_info["size_gb"]
+        
+        # Dossier de destination: App/models/
+        models_dir = Path.cwd() / "models"
+        models_dir.mkdir(exist_ok=True)
+        
+        dest_path = models_dir / filename
+        
+        # Si le fichier existe déjà, le retourner
+        if dest_path.exists():
+            console.print(f"[dim]Modèle déjà présent: {dest_path}[/dim]")
+            return str(dest_path)
+        
+        console.print(f"\n[bold cyan]📥 Téléchargement de {filename}...[/bold cyan]")
+        console.print(f"[dim]Source: {url}[/dim]")
+        console.print(f"[dim]Taille: ~{size_gb} GB[/dim]")
+        console.print(f"[dim]Destination: {dest_path}[/dim]\n")
+        
+        temp_path = dest_path.with_suffix(".tmp")
+        
+        try:
+            # Ouvrir la connexion pour obtenir la taille totale
+            req = urllib.request.Request(url, headers={"User-Agent": "ClipGenius/1.0"})
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                total_size = int(response.headers.get("Content-Length", 0))
+                
+                with Progress(
+                    TextColumn("[bold blue]{task.description}"),
+                    BarColumn(),
+                    DownloadColumn(),
+                    TransferSpeedColumn(),
+                ) as progress:
+                    task = progress.add_task(f"Téléchargement", total=total_size)
+                    
+                    with open(temp_path, "wb") as f:
+                        downloaded = 0
+                        chunk_size = 1024 * 1024  # 1 MB chunks
+                        
+                        while True:
+                            chunk = response.read(chunk_size)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            progress.update(task, completed=downloaded)
+            
+            # Renommer le fichier temporaire
+            shutil.move(str(temp_path), str(dest_path))
+            console.print(f"\n[bold green]✓ Modèle téléchargé avec succès![/bold green]")
+            console.print(f"[dim]Emplacement: {dest_path}[/dim]\n")
+            return str(dest_path)
+            
+        except urllib.error.URLError as e:
+            console.print(f"[red]Erreur réseau: {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]Erreur téléchargement: {e}[/red]")
+        finally:
+            # Nettoyer le fichier temporaire en cas d'erreur
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except:
+                    pass
+        
+        return None
+
+    @staticmethod
     def _find_model() -> Optional[str]:
         """Cherche le modèle GGUF dans les emplacements courants (Phi-4 prioritaire)"""
         # Noms possibles du modèle - Phi-4 en priorité, puis Phi-3 en fallback
@@ -302,6 +406,20 @@ class LocalLLM:
                     console.print(f"[dim]Modèle trouvé: {path}[/dim]")
                     return str(path)
 
+        # Modèle non trouvé: proposer le téléchargement automatique
+        console.print("[yellow]⚠ Modèle LLM non trouvé localement[/yellow]")
+        console.print("[cyan]Téléchargement automatique de Phi-4-mini...[/cyan]")
+        
+        # Essayer Phi-4-mini d'abord, puis Phi-3-mini en fallback
+        downloaded_path = LocalLLM._download_model("phi-4-mini")
+        if downloaded_path:
+            return downloaded_path
+        
+        console.print("[yellow]Échec Phi-4-mini, essai avec Phi-3-mini...[/yellow]")
+        downloaded_path = LocalLLM._download_model("phi-3-mini")
+        if downloaded_path:
+            return downloaded_path
+        
         return None
 
     def generate(
