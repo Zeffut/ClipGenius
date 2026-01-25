@@ -41,6 +41,7 @@ source .venv/bin/activate  # Mac/Linux
 ### 3. Installer les dépendances
 
 ```bash
+cd App
 pip install -r requirements.txt
 ```
 
@@ -67,6 +68,7 @@ choco install ffmpeg
 Pour utiliser l'analyse IA cloud (GPT-4o-mini):
 
 ```bash
+cd App
 cp .env.example .env
 # Éditer .env et ajouter: OPENAI_API_KEY=sk-votre-cle
 ```
@@ -78,6 +80,7 @@ cp .env.example .env
 ### Lancer l'application
 
 ```bash
+cd App
 python app.py
 ```
 
@@ -89,7 +92,7 @@ L'interface web s'ouvre automatiquement dans une fenêtre native.
 2. **Preset** : Choisir automatiquement selon le titre (ou manuel)
 3. **Paramètres** : Ajuster durée min/max et nombre de clips
 4. **Générer** : Cliquer "Lancer la génération"
-5. **Résultat** : Clips générés dans `output/`
+5. **Résultat** : Clips générés dans `~/Downloads` (copie automatique)
 
 ## 🎨 Les 4 Presets
 
@@ -121,45 +124,43 @@ L'interface web s'ouvre automatiquement dans une fenêtre native.
 
 ```
 ClipGenius/
-├── app.py                  # Application principale (PyWebView)
-├── requirements.txt        # Dépendances Python
-├── AGENTS.md              # Documentation pour agents IA
-├── README.md              # Ce fichier
-├── .env.example           # Template configuration
-├── .gitignore             # Fichiers exclus de Git
+├── App/                      # Application principale
+│   ├── app.py                   # Entry point (PyWebView)
+│   ├── web_app.py               # Serveur Flask
+│   ├── requirements.txt         # Dépendances Python
+│   ├── .env.example             # Template configuration
+│   │
+│   ├── src/                     # Modules Python
+│   │   ├── downloader.py           # yt-dlp YouTube downloader
+│   │   ├── ai_analyzer.py          # Analyse IA (GPT-4o-mini)
+│   │   ├── local_llm.py            # Phi-4-mini local (offline)
+│   │   ├── viral_detector.py       # Détection audio/video (fallback)
+│   │   ├── smart_cropper.py        # MediaPipe face detection
+│   │   ├── clip_generator.py       # Pipeline génération clips
+│   │   ├── subtitles.py            # Whisper transcription
+│   │   ├── enriched_subtitles.py   # Sous-titres animés TikTok
+│   │   ├── hook_optimizer.py       # Optimisation hook 3s
+│   │   ├── adaptive_duration.py    # Durées adaptatives
+│   │   ├── audio_overlay.py        # Musique de fond
+│   │   ├── thumbnail_generator.py  # Miniatures
+│   │   ├── auto_config.py          # Auto-configuration
+│   │   └── presets.py              # Configurations presets
+│   │
+│   ├── web/                     # Interface web
+│   │   └── templates/
+│   │       └── index.html          # UI complète
+│   │
+│   ├── tests/                   # Tests
+│   ├── models/                  # Modèles LLM locaux (gitignored)
+│   ├── downloads/               # Vidéos YouTube temporaires
+│   ├── uploads/                 # Vidéos locales uploadées
+│   └── output/                  # Clips générés
 │
-├── src/                   # Modules Python
-│   ├── downloader.py         # yt-dlp YouTube downloader
-│   ├── ai_analyzer.py        # Analyse IA (GPT-4o-mini)
-│   ├── local_llm.py          # Phi-4-mini local (offline)
-│   ├── viral_detector.py     # Détection audio/video (fallback)
-│   ├── smart_cropper.py      # MediaPipe face detection
-│   ├── clip_generator.py     # Pipeline génération clips
-│   ├── subtitles.py          # Whisper transcription
-│   ├── enriched_subtitles.py # Sous-titres animés TikTok
-│   ├── hook_optimizer.py     # Optimisation hook 3s
-│   ├── adaptive_duration.py  # Durées adaptatives
-│   ├── audio_overlay.py      # Musique de fond
-│   ├── thumbnail_generator.py # Miniatures
-│   ├── auto_config.py        # Auto-configuration
-│   └── presets.py            # Configurations presets
-│
-├── web/                   # Interface web
-│   └── templates/
-│       └── index.html        # UI complète (4200+ lignes)
-│
-├── tests/                 # Tests
-│   ├── test_import.py
-│   ├── test_local_llm.py
-│   ├── test_pipeline.py
-│   └── test_visual.py
-│
-├── models/                # Modèles LLM locaux
-│   └── .gitignore            # Modèles exclus de Git
-│
-├── downloads/             # Vidéos YouTube temporaires
-├── uploads/               # Vidéos locales uploadées
-└── output/                # Clips générés
+├── Site/                     # Website (coming soon)
+├── AGENTS.md                 # Documentation pour agents IA
+├── README.md                 # Ce fichier
+├── CHANGELOG.md              # Historique des versions
+└── STRUCTURE.md              # Documentation technique
 ```
 
 ## 🔧 Configuration Avancée

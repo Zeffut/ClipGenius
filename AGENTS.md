@@ -12,6 +12,8 @@ ClipGenius beta is a viral clip generator that transforms YouTube videos or loca
 
 ### Installation
 ```bash
+cd App
+
 # Install dependencies (requires Python 3.9+, FFmpeg in PATH)
 pip install -r requirements.txt
 
@@ -23,33 +25,28 @@ pip install -r requirements.txt
 
 ### Running the Application
 ```bash
-# Standard usage
-python main.py <youtube_url> [options]
+cd App
 
-# From local file
-python main.py --input video.mp4
+# Launch the application (PyWebView native window)
+python app.py
 
-# Show all CLI options
-python main.py --help
-
-# List available presets
-python main.py --list-presets
-
-# Auto-configuration mode
-python main.py URL --auto-config --auto-config-verbose
+# Or run Flask server only (for development)
+python web_app.py
 ```
 
 ### Testing
 
 ```bash
+cd App
+
 # Run all tests
-python test_pipeline.py
+python tests/test_pipeline.py
 
 # Quick test (imports only)
-python test_pipeline.py --quick
+python tests/test_pipeline.py --quick
 
 # Test with specific video file
-python test_pipeline.py --with-video path/to/video.mp4
+python tests/test_pipeline.py --with-video path/to/video.mp4
 
 # Run individual test files
 python tests/test_import.py
@@ -58,11 +55,13 @@ python tests/test_visual.py
 ```
 
 **Note:** This project uses custom test scripts (not pytest/unittest). Tests are located in:
-- `test_pipeline.py` - Main pipeline integration tests
-- `tests/test_*.py` - Individual component tests
+- `App/tests/test_pipeline.py` - Main pipeline integration tests
+- `App/tests/test_*.py` - Individual component tests
 
 ### Development Server
 ```bash
+cd App
+
 # Flask dev server (for web interface testing)
 python web_app.py
 ```
@@ -179,34 +178,38 @@ class ClipConfig:
 ### Directory Structure
 ```
 ClipGenius/
-├── main.py                 # Entry point, CLI definition
-├── test_pipeline.py        # Integration tests
-├── web_app.py             # Flask dev server
-├── requirements.txt       # Dependencies
-├── CLAUDE.md             # Claude AI agent instructions
-├── AGENTS.md             # This file
-├── src/                  # Source modules
-│   ├── downloader.py         # yt-dlp video downloader
-│   ├── viral_detector.py     # Audio/video energy analysis (fallback)
-│   ├── ai_analyzer.py        # GPT-4o-mini/Phi-4-mini content analysis
-│   ├── local_llm.py          # Local Phi-4-mini via llama.cpp
-│   ├── smart_cropper.py      # MediaPipe face detection + blur-fill
-│   ├── clip_generator.py     # Main video processing pipeline
-│   ├── subtitles.py          # Whisper transcription
-│   ├── enriched_subtitles.py # TikTok-style animated captions
-│   ├── hook_optimizer.py     # First 3 seconds optimization
-│   ├── advanced_audio_analyzer.py  # Emotion/event detection
-│   ├── adaptive_duration.py  # Platform-specific duration
-│   ├── thumbnail_generator.py # Thumbnail creation
-│   ├── audio_overlay.py      # Background music
-│   ├── auto_config.py        # Intelligent auto-configuration
-│   └── presets.py            # Visual/subtitle presets
-├── tests/                # Test files
-│   ├── test_import.py
-│   ├── test_local_llm.py
-│   ├── test_pipeline.py
-│   └── test_visual.py
-└── output/               # Generated clips (gitignored)
+├── App/                      # Application principale
+│   ├── app.py                    # Entry point (PyWebView)
+│   ├── web_app.py                # Flask server
+│   ├── build_mac.py              # macOS build script
+│   ├── requirements.txt          # Dependencies
+│   ├── src/                      # Source modules
+│   │   ├── downloader.py             # yt-dlp video downloader
+│   │   ├── viral_detector.py         # Audio/video energy analysis (fallback)
+│   │   ├── ai_analyzer.py            # GPT-4o-mini/Phi-4-mini content analysis
+│   │   ├── local_llm.py              # Local Phi-4-mini via llama.cpp
+│   │   ├── smart_cropper.py          # MediaPipe face detection + blur-fill
+│   │   ├── clip_generator.py         # Main video processing pipeline
+│   │   ├── subtitles.py              # Whisper transcription
+│   │   ├── enriched_subtitles.py     # TikTok-style animated captions
+│   │   ├── hook_optimizer.py         # First 3 seconds optimization
+│   │   ├── advanced_audio_analyzer.py # Emotion/event detection
+│   │   ├── adaptive_duration.py      # Platform-specific duration
+│   │   ├── thumbnail_generator.py    # Thumbnail creation
+│   │   ├── audio_overlay.py          # Background music
+│   │   ├── auto_config.py            # Intelligent auto-configuration
+│   │   └── presets.py                # Visual/subtitle presets
+│   ├── tests/                    # Test files
+│   ├── web/                      # Frontend templates
+│   ├── models/                   # AI models (gitignored)
+│   ├── downloads/                # Downloaded videos (gitignored)
+│   ├── uploads/                  # Uploaded files (gitignored)
+│   └── output/                   # Generated clips (gitignored)
+├── Site/                     # Website (coming soon)
+├── AGENTS.md                 # This file
+├── README.md                 # Documentation
+├── CHANGELOG.md              # Version history
+└── STRUCTURE.md              # Technical details
 ```
 
 ### Key Design Patterns
@@ -296,7 +299,7 @@ PYCAPS_OPENAI_API_KEY=sk-...       # Optional, for emoji generation
 ## Testing Guidelines
 
 - Test files use custom framework (not pytest)
-- Run `python test_pipeline.py` for full suite
+- Run `python tests/test_pipeline.py` for full suite
 - Tests check: imports, hook analysis, subtitle enrichment, adaptive duration
 - Use `--quick` flag for fast import-only tests
 - Mock external dependencies when possible

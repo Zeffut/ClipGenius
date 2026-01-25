@@ -4,66 +4,61 @@
 
 ```
 ClipGenius/
-├── 🚀 app.py                  # Point d'entrée principal (PyWebView wrapper)
-├── 🌐 web_app.py              # Serveur Flask + API routes (841 lignes)
-├── 📦 requirements.txt        # Dépendances Python
-├── 📖 README.md              # Documentation utilisateur
-├── 🤖 AGENTS.md              # Documentation pour agents IA (Claude, etc.)
-├── 📋 STRUCTURE.md           # Ce fichier
+├── 📁 App/                       # Application principale
+│   ├── 🚀 app.py                    # Point d'entrée (PyWebView wrapper)
+│   ├── 🌐 web_app.py                # Serveur Flask + API routes
+│   ├── 📦 requirements.txt          # Dépendances Python
+│   ├── ⚙️ .env.example              # Template configuration API
+│   │
+│   ├── 🏗️ build_mac.py              # Script build macOS .app
+│   ├── 🏗️ build_mac.sh              # Shell script build .dmg
+│   │
+│   ├── 📁 src/                      # Modules Python (14.5k lignes)
+│   │   ├── __init__.py
+│   │   ├── downloader.py               # yt-dlp YouTube downloader
+│   │   ├── ai_analyzer.py              # Analyse IA GPT-4o-mini
+│   │   ├── local_llm.py                # Phi-4-mini local offline
+│   │   ├── viral_detector.py           # Audio/video fallback
+│   │   ├── smart_cropper.py            # MediaPipe face detection
+│   │   ├── clip_generator.py           # Pipeline principal
+│   │   ├── subtitles.py                # Whisper transcription
+│   │   ├── enriched_subtitles.py       # Sous-titres TikTok animés
+│   │   ├── hook_optimizer.py           # Hook 3 secondes
+│   │   ├── adaptive_duration.py        # Durées adaptatives
+│   │   ├── advanced_audio_analyzer.py  # Émotions/événements
+│   │   ├── audio_overlay.py            # Musique de fond
+│   │   ├── thumbnail_generator.py      # Miniatures
+│   │   ├── auto_config.py              # Auto-configuration
+│   │   └── presets.py                  # Configurations presets
+│   │
+│   ├── 🌐 web/                      # Interface web
+│   │   └── templates/
+│   │       └── index.html              # UI complète
+│   │
+│   ├── 🧪 tests/                    # Tests unitaires
+│   │   ├── test_import.py
+│   │   ├── test_local_llm.py
+│   │   ├── test_pipeline.py
+│   │   ├── test_visual.py
+│   │   ├── test_server.py
+│   │   └── test_subtitles.py
+│   │
+│   ├── 🎨 assets/                   # Ressources statiques
+│   │   └── fonts/                      # Polices pour sous-titres
+│   │
+│   ├── 🤖 models/                   # Modèles LLM locaux (gitignored)
+│   ├── 📥 downloads/                # Vidéos YouTube (temporaire)
+│   ├── 📤 uploads/                  # Fichiers uploadés (temporaire)
+│   └── 📤 output/                   # Clips générés
 │
-├── ⚙️ .env.example            # Template configuration API
-├── 🚫 .gitignore             # Fichiers exclus de Git
-├── 📝 .gitattributes         # Configuration Git (EOL, binaires)
+├── 📁 Site/                      # Website (coming soon)
 │
-├── 🏗️ build_mac.py            # Script build macOS .app
-├── 🏗️ build_mac.sh            # Shell script build .dmg
-│
-├── 📁 src/                   # Modules Python (14.5k lignes)
-│   ├── __init__.py
-│   ├── downloader.py         # yt-dlp YouTube downloader (183 lignes)
-│   ├── ai_analyzer.py        # Analyse IA GPT-4o-mini (492 lignes)
-│   ├── local_llm.py          # Phi-4-mini local offline (297 lignes)
-│   ├── viral_detector.py     # Audio/video fallback (443 lignes)
-│   ├── smart_cropper.py      # MediaPipe face detection (1214 lignes)
-│   ├── clip_generator.py     # Pipeline principal (881 lignes)
-│   ├── subtitles.py          # Whisper transcription (1114 lignes)
-│   ├── enriched_subtitles.py # Sous-titres TikTok animés (668 lignes)
-│   ├── hook_optimizer.py     # Hook 3 secondes (420 lignes)
-│   ├── adaptive_duration.py  # Durées adaptatives (491 lignes)
-│   ├── advanced_audio_analyzer.py # Émotions/événements (672 lignes)
-│   ├── audio_overlay.py      # Musique de fond (422 lignes)
-│   ├── thumbnail_generator.py # Miniatures (638 lignes)
-│   ├── auto_config.py        # Auto-configuration (873 lignes)
-│   └── presets.py            # Configurations presets (695 lignes)
-│
-├── 🌐 web/                   # Interface web
-│   └── templates/
-│       └── index.html        # UI complète (4543 lignes)
-│
-├── 🧪 tests/                 # Tests unitaires
-│   ├── test_import.py        # Test imports
-│   ├── test_local_llm.py     # Test LLM local
-│   ├── test_pipeline.py      # Test pipeline complet
-│   ├── test_visual.py        # Test effets visuels
-│   ├── test_server.py        # Test serveur Flask
-│   └── test_subtitles.py     # Test génération sous-titres
-│
-├── 🎨 assets/                # Ressources statiques
-│   └── fonts/                # Polices pour sous-titres
-│
-├── 🤖 models/                # Modèles LLM locaux (4.5GB)
-│   ├── .gitkeep
-│   ├── Phi-3-mini-4k-instruct-q4.gguf
-│   └── Phi-4-mini-instruct.Q4_K_M.gguf
-│
-├── 📥 downloads/             # Vidéos YouTube (temporaire)
-│   └── .gitkeep
-│
-├── 📤 uploads/               # Fichiers uploadés (temporaire)
-│   └── .gitkeep
-│
-└── 📤 output/                # Clips générés
-    └── .gitkeep
+├── 📖 README.md                  # Documentation utilisateur
+├── 🤖 AGENTS.md                  # Documentation pour agents IA
+├── 📋 STRUCTURE.md               # Ce fichier
+├── 📋 CHANGELOG.md               # Historique des versions
+├── 🚫 .gitignore                 # Fichiers exclus de Git
+└── 📝 .gitattributes             # Configuration Git
 ```
 
 ## 📊 Statistiques
@@ -77,12 +72,14 @@ ClipGenius/
 
 ### Utilisateur Final
 ```bash
+cd App
 python app.py
 ```
 Lance l'application native avec PyWebView.
 
 ### Développeur - Tests
 ```bash
+cd App
 python tests/test_pipeline.py                    # Tests complets
 python tests/test_pipeline.py --quick            # Tests rapides (imports)
 python tests/test_pipeline.py --with-video video.mp4  # Tests avec vidéo
@@ -94,6 +91,7 @@ python tests/test_subtitles.py                   # Tests sous-titres
 
 ### Développeur - Build
 ```bash
+cd App
 ./build_mac.sh              # Build complet .app + .dmg
 python build_mac.py         # Build .app seulement
 ```
@@ -185,11 +183,11 @@ python build_mac.py         # Build .app seulement
 # Fichiers ignorés automatiquement (.gitignore)
 - __pycache__/
 - .venv/
-- output/
-- downloads/
-- uploads/
+- App/output/
+- App/downloads/
+- App/uploads/
 - *.mp4, *.mp3, *.wav
-- models/*.gguf
+- App/models/*.gguf
 - .env
 - .DS_Store
 ```

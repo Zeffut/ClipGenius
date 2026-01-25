@@ -77,40 +77,6 @@
             font-weight: 600;
             letter-spacing: -0.2px;
         }
-        
-        /* Connection Indicator */
-        .connection-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-left: 12px;
-            position: relative;
-            transition: all 0.3s ease;
-        }
-        
-        .connection-indicator.disconnected {
-            background: #6e6e73;
-            opacity: 0.5;
-        }
-        
-        .connection-indicator.connecting {
-            background: #ff9f0a;
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-        
-        .connection-indicator.connected {
-            background: #30d158;
-            box-shadow: 0 0 8px rgba(48, 209, 88, 0.5);
-        }
-        
-        .connection-indicator.error {
-            background: #ff453a;
-            animation: blink 1s ease-in-out infinite;
-        }
-        
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
         }
 
         .titlebar-center {
@@ -1818,8 +1784,6 @@
         <div class="titlebar-left">
             <div class="app-icon">CG</div>
             <span class="app-title">ClipGenius</span>
-            <!-- Connection Indicator -->
-            <div class="connection-indicator disconnected" id="connectionIndicator" title="Déconnecté"></div>
         </div>
         <div class="titlebar-center" id="titlebarStatus"></div>
         <div class="titlebar-actions">
@@ -2335,14 +2299,7 @@
                         <div class="clips-grid" id="clipsGrid"></div>
                     </div>
 
-                    <div style="margin-top: 24px;">
-                        <button type="button" class="btn" onclick="resetAndRestart()">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                            Créer de nouveaux clips
-                        </button>
-                    </div>
+
                 </div>
 
             </div>
@@ -2929,37 +2886,6 @@
 
             // Start the actual generation
             submitForm();
-        }
-
-        // Reset and restart
-        function resetAndRestart() {
-            // Déverrouiller l'interface au cas où elle serait verrouillée
-            unlockUIAfterProcessing();
-            
-            // Reset all nav items
-            document.querySelectorAll('.nav-item').forEach((item, index) => {
-                item.classList.remove('completed', 'processing', 'active');
-                if (index > 0) {
-                    item.classList.add('disabled');
-                }
-            });
-
-            // Reset first step
-            const sourceNavItem = document.querySelector(`.nav-item[data-step="source"]`);
-            sourceNavItem.classList.add('active');
-
-            // Clear form
-            document.getElementById('url').value = '';
-            removeSelectedFile();  // Aussi effacer le fichier local
-            
-            // Remettre sur l'onglet fichier local (défaut)
-            switchSourceTab('local');
-
-            // Reset progress
-            reset();
-
-            // Navigate to source
-            navigateToStep('source');
         }
 
         // Confetti celebration
@@ -4123,35 +4049,6 @@
             // Debug désactivé
         }
         
-        // Mettre à jour l'indicateur visuel de connexion
-        function updateConnectionIndicator(state) {
-            connectionState = state;
-            const indicator = document.getElementById('connectionIndicator');
-            if (!indicator) return;
-            
-            indicator.className = 'connection-indicator';
-            
-            switch(state) {
-                case 'connected':
-                    indicator.classList.add('connected');
-                    indicator.title = 'Connecté au serveur';
-                    break;
-                case 'connecting':
-                case 'reconnecting':
-                    indicator.classList.add('connecting');
-                    indicator.title = 'Connexion en cours...';
-                    break;
-                case 'disconnected':
-                    indicator.classList.add('disconnected');
-                    indicator.title = 'Déconnecté du serveur';
-                    break;
-                case 'error':
-                    indicator.classList.add('error');
-                    indicator.title = 'Erreur de connexion';
-                    break;
-            }
-        }
-        
         // Cleanup complet de toutes les connexions
         function cleanupAllConnections() {
             logConnection('Nettoyage de toutes les connexions');
@@ -4204,7 +4101,6 @@
             const attemptReconnect = () => {
                 if (reconnectAttempts >= maxReconnectAttempts) {
                     logConnection(`Échec après ${maxReconnectAttempts} tentatives`, 'error');
-                    updateConnectionIndicator('error');
                     handleJobError('Impossible de maintenir la connexion au serveur');
                     return;
                 }
@@ -4214,7 +4110,6 @@
                 logConnection(`Reconnexion dans ${delay}ms (tentative ${reconnectAttempts}/${maxReconnectAttempts})`, 'warn');
                 
                 isReconnecting = true;
-                updateConnectionIndicator('reconnecting');
                 
                 setTimeout(() => {
                     logConnection(`Tentative de reconnexion #${reconnectAttempts}`);
@@ -4223,7 +4118,6 @@
             };
             
             logConnection(`Création EventSource pour job ${jobId}`);
-            updateConnectionIndicator('connecting');
             
             try {
                 activeEventSource = new EventSource(`/api/stream/${jobId}`);
@@ -4275,7 +4169,6 @@
                 logConnection('✅ Connexion EventSource établie');
                 reconnectAttempts = 0; // Reset counter on successful connection
                 isReconnecting = false;
-                updateConnectionIndicator('connected');
                 lastHeartbeatTime = Date.now();
             };
             
@@ -4391,7 +4284,6 @@
                 // Check if the connection is still open
                 if (activeEventSource && activeEventSource.readyState === EventSource.CLOSED) {
                     logConnection('Connexion fermée, tentative de reconnexion', 'warn');
-                    updateConnectionIndicator('disconnected');
                     
                     // Cleanup local reference
                     if (activeEventSource) {
@@ -4405,7 +4297,6 @@
                     attemptReconnect();
                 } else if (activeEventSource && activeEventSource.readyState === EventSource.CONNECTING) {
                     logConnection('EventSource en cours de reconnexion automatique', 'info');
-                    updateConnectionIndicator('connecting');
                 }
             };
         }
@@ -5112,7 +5003,6 @@
         
         window.addEventListener('offline', () => {
             logConnection('Navigateur OFFLINE', 'warn');
-            updateConnectionIndicator('disconnected');
         });
         
         // === DÉTECTION ONGLET INACTIF → ACTIF ===
