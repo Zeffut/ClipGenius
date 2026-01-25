@@ -38,6 +38,9 @@ if IS_APPLE_SILICON:
 if os.getenv("OPENAI_API_KEY") and not os.getenv("PYCAPS_OPENAI_API_KEY"):
     os.environ["PYCAPS_OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
+# Note: mlx_whisper utilise déjà un cache singleton interne (ModelHolder)
+# Le modèle n'est chargé qu'une fois et réutilisé automatiquement
+
 
 # =============================================================================
 # CUSTOM LLM PROVIDER - Émojis icônes uniquement (pas de visages)

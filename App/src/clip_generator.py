@@ -526,8 +526,13 @@ class ClipGenerator:
                     '-max_muxing_queue_size', '9999',  # Éviter les overflow de queue
                 ]
 
+                # Optimisations FFmpeg pour presets rapides (fast, medium, etc.)
+                if self.config.preset in ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium']:
+                    ffmpeg_params.extend([
+                        '-tune', 'fastdecode',  # Optimise pour décodage rapide (moins de refs)
+                    ])
                 # Ajouter des paramètres d'optimisation pour presets lents
-                if self.config.preset in ['slow', 'slower', 'veryslow']:
+                elif self.config.preset in ['slow', 'slower', 'veryslow']:
                     ffmpeg_params.extend([
                         '-tune', 'film',
                         '-x264opts', 'rc-lookahead=60:ref=6',
@@ -556,36 +561,54 @@ class ClipGenerator:
             if not use_hw and self.config.crf is None:
                 write_params['bitrate'] = self.config.video_bitrate
 
-            # Écrire le fichier
-            processed_clip.write_videofile(output_path, **write_params)
+            # =====================================================
+            # OPTIMISATION SINGLE-PASS: Sous-titres intégrés AVANT encodage
+            # Évite le double encodage (économise ~50% du temps d'encodage)
+            # =====================================================
+            final_clip_to_encode = processed_clip
+            subtitle_clips = []
+            temp_audio_file = None
+            ass_file = None
             
-            # Ajouter les sous-titres si demandé
             if self.config.add_subtitles:
-                console.print(f"[cyan]Ajout des sous-titres TikTok au clip {clip_number}...[/cyan]")
-                temp_output = None
-                ass_file = None
+                console.print(f"[cyan]Préparation sous-titres TikTok (single-pass)...[/cyan]")
                 try:
                     from .tiktok_captions import generate_tiktok_ass
                     from .subtitles import SubtitleGenerator
+                    from .ass_to_moviepy import render_ass_to_moviepy
                     
-                    # ✨ OPTIMISATION: Transcrire UNIQUEMENT ce clip avec 'turbo' (rapide + précis)
-                    # Au lieu de réutiliser la transcription 'base' de toute la vidéo
-                    clip_words = None
-                    console.print(f"[cyan]Transcription du clip {clip_number} avec Whisper turbo...[/cyan]")
+                    # 1. Extraire l'audio du subclip vers un fichier temporaire
+                    temp_audio_file = output_path.replace('.mp4', '_temp_audio.wav')
                     try:
-                        subtitle_gen = SubtitleGenerator(model_size="turbo", language=None)
-                        clip_transcription = subtitle_gen.transcribe_with_words(output_path)
-                        
-                        if clip_transcription and clip_transcription.words:
-                            clip_words = clip_transcription.words
-                            console.print(f"[green]✓ Clip transcrit: {len(clip_words)} mots[/green]")
-                        else:
-                            console.print(f"[yellow]⚠ Aucun mot détecté dans le clip[/yellow]")
+                        console.print(f"[dim]Extraction audio pour transcription...[/dim]")
+                        subclip.audio.write_audiofile(
+                            temp_audio_file, 
+                            fps=16000,  # 16kHz optimal pour Whisper
+                            nbytes=2,   # 16-bit
+                            logger=None
+                        )
                     except Exception as e:
-                        console.print(f"[yellow]⚠ Erreur transcription clip: {e}[/yellow]")
+                        console.print(f"[yellow]⚠ Erreur extraction audio: {e}[/yellow]")
+                        temp_audio_file = None
                     
+                    # 2. Transcrire l'audio avec Whisper turbo
+                    clip_words = None
+                    if temp_audio_file and os.path.exists(temp_audio_file):
+                        console.print(f"[cyan]Transcription du clip {clip_number} avec Whisper turbo...[/cyan]")
+                        try:
+                            subtitle_gen = SubtitleGenerator(model_size="turbo", language=None)
+                            clip_transcription = subtitle_gen.transcribe_with_words(temp_audio_file)
+                            
+                            if clip_transcription and clip_transcription.words:
+                                clip_words = clip_transcription.words
+                                console.print(f"[green]✓ Clip transcrit: {len(clip_words)} mots[/green]")
+                            else:
+                                console.print(f"[yellow]⚠ Aucun mot détecté dans le clip[/yellow]")
+                        except Exception as e:
+                            console.print(f"[yellow]⚠ Erreur transcription clip: {e}[/yellow]")
+                    
+                    # 3. Générer le fichier ASS et les TextClips
                     if clip_words:
-                        # Générer le fichier .ass
                         ass_file = output_path.replace('.mp4', '.ass')
                         generate_tiktok_ass(
                             words=clip_words,
@@ -598,56 +621,52 @@ class ClipGenerator:
                             }
                         )
                         
-                        # Burn subtitles with MoviePy (fallback sans libass)
-                        from .ass_to_moviepy import add_subtitles_moviepy
-                        from moviepy import VideoFileClip
+                        # 4. Convertir ASS en TextClips MoviePy
+                        subtitle_clips = render_ass_to_moviepy(
+                            ass_file,
+                            video_width=self.config.output_width,
+                            video_height=self.config.output_height
+                        )
                         
-                        console.print(f"[cyan]Intégration sous-titres (MoviePy)...[/cyan]")
-                        
-                        # Charger la vidéo générée
-                        video_with_subs = None
-                        temp_output = output_path.replace('.mp4', '_nosubs.mp4')
-                        try:
-                            os.rename(output_path, temp_output)
-                            video_with_subs = VideoFileClip(temp_output)
-                            
-                            # Ajouter les sous-titres
-                            final_clip = add_subtitles_moviepy(video_with_subs, ass_file)
-                            
-                            # Écrire la vidéo finale
-                            final_clip.write_videofile(
-                                output_path,
-                                codec='libx264',
-                                audio_codec='aac',
-                                preset='fast',
-                                bitrate='8000k',
-                                fps=30,
-                                logger=None
+                        if subtitle_clips:
+                            # 5. Composite: processed_clip + sous-titres = clip final
+                            console.print(f"[cyan]Intégration sous-titres (single-pass)...[/cyan]")
+                            final_clip_to_encode = CompositeVideoClip(
+                                [processed_clip] + subtitle_clips,
+                                size=(self.config.output_width, self.config.output_height)
                             )
-                            
-                        finally:
-                            # Cleanup
-                            if video_with_subs:
-                                video_with_subs.close()
-                            if temp_output and os.path.exists(temp_output):
-                                os.remove(temp_output)
-                            if ass_file and os.path.exists(ass_file):
-                                os.remove(ass_file)
-                        
-                        console.print(f"[green]✓ Sous-titres ajoutés au clip {clip_number}[/green]")
+                            console.print(f"[green]✓ {len(subtitle_clips)} sous-titres intégrés[/green]")
+                        else:
+                            console.print(f"[yellow]⚠ Aucun sous-titre généré[/yellow]")
                     else:
                         console.print(f"[yellow]⚠ Aucune transcription disponible pour ce clip[/yellow]")
                         
                 except Exception as e:
-                    console.print(f"[yellow]⚠ Échec sous-titres: {e}[/yellow]")
-                    # Si l'ajout de sous-titres échoue, restaurer le fichier original
-                    if temp_output and os.path.exists(temp_output):
-                        if os.path.exists(output_path):
-                            os.remove(output_path)
-                        os.rename(temp_output, output_path)
-                    # Cleanup ASS file
+                    console.print(f"[yellow]⚠ Échec préparation sous-titres: {e}[/yellow]")
+                    # Fallback: encoder sans sous-titres
+                    final_clip_to_encode = processed_clip
+                finally:
+                    # Cleanup fichiers temporaires
+                    if temp_audio_file and os.path.exists(temp_audio_file):
+                        try:
+                            os.remove(temp_audio_file)
+                        except Exception:
+                            pass
                     if ass_file and os.path.exists(ass_file):
-                        os.remove(ass_file)
+                        try:
+                            os.remove(ass_file)
+                        except Exception:
+                            pass
+            
+            # Écrire le fichier final (UN SEUL encodage)
+            final_clip_to_encode.write_videofile(output_path, **write_params)
+            
+            # Cleanup des TextClips
+            for tc in subtitle_clips:
+                try:
+                    tc.close()
+                except Exception:
+                    pass
             
         finally:
             if processed_clip is not None:
