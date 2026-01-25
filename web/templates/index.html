@@ -2453,7 +2453,6 @@
             const contentType = window.analysisData.contentType;
             const config = window.analysisData.config;
             
-            console.log('📋 Application de l\'analyse à la configuration:', contentType, config);
             
             // 1. Sélectionner le preset correspondant
             const presetMapping = {
@@ -2853,7 +2852,6 @@
                                 const detectedPreset = contentTypeToPreset[result.content_type] || 'podcast';
                                 
                                 // Auto-sélectionner le preset détecté avec badge AUTO
-                                console.log(`[Auto-config] Type: ${result.content_type} → Preset: ${detectedPreset}`);
                                 selectPreset(detectedPreset, true);  // true = sélection automatique
                                 
                                 // ✨ Mettre à jour le sous-titre de l'onglet Analyse
@@ -3113,7 +3111,6 @@
                     }
                 }
             } catch (err) {
-                console.log('Duration fetch failed or timeout:', err);
                 // Continue anyway - video might still be accessible
             }
             
@@ -3141,7 +3138,6 @@
                     errorMessage = 'Cette vidéo est indisponible ou privée';
                 }
             } catch (err) {
-                console.log('oEmbed API unavailable, using fallback');
             }
             
             // If video is unavailable, show error
@@ -3845,14 +3841,12 @@
             const hasTutorialPattern = tutorialPatterns.some(p => titleLower.includes(p));
             
             if (hasTutorialPattern) {
-                console.log('🔍 Heuristique: Pattern tutorial détecté → tutorial');
                 return 'tutorial';
             }
             
             // Heuristique 2: Présence de noms propres multiples (souvent podcast/interview)
             const capitalWords = title.match(/\b[A-Z][a-z]+\b/g) || [];
             if (capitalWords.length >= 2) {
-                console.log('🔍 Heuristique: Noms propres multiples → podcast');
                 return 'podcast';
             }
             
@@ -3866,28 +3860,23 @@
                 const hasGamingVerb = gamingVerbs.some(v => titleLower.includes(v));
                 
                 if (hasGamingVerb) {
-                    console.log('🔍 Heuristique: Pronom personnel + verbe action → gaming');
                     return 'gaming';
                 }
                 
-                console.log('🔍 Heuristique: Pronom personnel → vlog');
                 return 'vlog';
             }
             
             // Heuristique 4: Titre long (> 8 mots) → podcast
             if (titleTokens.length > 8) {
-                console.log('🔍 Heuristique: Titre long → podcast');
                 return 'podcast';
             }
             
             // Heuristique 5: Présence de ponctuation forte (: - |) → podcast
             if (titleLower.includes(':') || titleLower.includes(' - ') || titleLower.includes(' | ')) {
-                console.log('🔍 Heuristique: Ponctuation forte → podcast');
                 return 'podcast';
             }
             
             // Par défaut: vlog
-            console.log('🔍 Heuristique: Aucun pattern détecté → vlog');
             return 'vlog';
         }
         
@@ -3916,8 +3905,6 @@
             };
             
             // Debug: afficher les scores dans la console
-            console.log('🎯 Détection de preset pour:', title);
-            console.log('📊 Scores:', scores);
             
             // Trouver le preset avec le meilleur score
             let bestPreset = 'vlog';
@@ -3933,7 +3920,6 @@
             
             // Si tous les scores sont à 0, utiliser analyse heuristique locale
             if (maxScore === 0) {
-                console.log('⚠️ Aucun mot-clé détecté, analyse heuristique...');
                 return detectPresetHeuristic(title, titleTokens);
             }
             
@@ -3948,7 +3934,6 @@
                     const difference = (topScore - secondScore) / topScore;
                     
                     if (difference < 0.3) {
-                        console.log('⚠️ Scores très proches et faibles, analyse heuristique...');
                         return detectPresetHeuristic(title, titleTokens);
                     }
                 }
@@ -3973,13 +3958,11 @@
                 
                 // Si un preset spécifique a au moins 70% du score vlog, le favoriser
                 if (bestSpecific.score >= vlogScore * 0.7) {
-                    console.log(`✅ ${bestSpecific.preset} favorisé sur vlog (score proche)`);
                     bestPreset = bestSpecific.preset;
                     maxScore = bestSpecific.score;
                 }
             }
             
-            console.log(`✅ Preset détecté: ${bestPreset} (score: ${maxScore})`);
             return bestPreset;
         }
         
@@ -4135,10 +4118,9 @@
         let isReconnecting = false;
         let connectionState = 'disconnected'; // disconnected, connecting, connected, error
         
-        // Logging détaillé de connexion
+        // Logging de connexion (désactivé en production)
         function logConnection(message, level = 'info') {
-            const timestamp = new Date().toISOString();
-            console.log(`[${timestamp}] [CONNECTION-${level.toUpperCase()}] ${message}`);
+            // Debug désactivé
         }
         
         // Mettre à jour l'indicateur visuel de connexion
@@ -4432,10 +4414,6 @@
         
         // ✨ NOUVEAU: Fonction centralisée pour gérer la completion
         function handleJobCompletion(jobId, status) {
-            console.log('✅ handleJobCompletion appelé');
-            console.log('✅ Status:', status);
-            console.log('✅ Clips:', status.clips);
-            
             progressSection.classList.remove('running');
             progressSection.classList.add('complete');
 
@@ -4471,15 +4449,11 @@
             
             // Afficher les clips IMMÉDIATEMENT (pas de setTimeout)
             if (status.clips?.length > 0) {
-                console.log(`✅ Appel showResults avec ${status.clips.length} clips`);
-                
                 // Appel direct sans délai
                 showResults(status.clips);
                 
                 // Force un reflow après l'ajout
                 void document.body.offsetHeight;
-            } else {
-                console.warn('⚠️ Aucun clip dans status.clips');
             }
         }
         
@@ -4505,10 +4479,8 @@
 
         // Update step - new version for progress-step elements
         function setStep(stepName) {
-            console.log(`🎯 setStep appelé avec: "${stepName}"`);
             
             if (stepName === currentStep) {
-                console.log(`⏭️ Même étape que précédemment (${currentStep}), skip`);
                 return;
             }
             
@@ -4521,17 +4493,14 @@
             let visualStep = stepName;
             if (stepName === 'analyze') {
                 visualStep = 'detect';  // Analyse IA → Détection des moments
-                console.log(`🔄 Mapping: analyze → detect`);
             } else if (stepName === 'transcribe') {
                 visualStep = 'detect';  // Transcription → Détection (si pas réutilisée)
-                console.log(`🔄 Mapping: transcribe → detect`);
             }
             
             // Define the visual step order (4 steps visible in Generation tab)
             const visualStepOrder = ['download', 'detect', 'generate', 'subtitles'];
             const stepIndex = visualStepOrder.indexOf(visualStep);
             
-            console.log(`📍 visualStep: "${visualStep}", index: ${stepIndex}`);
             
             // Update step indicators - ONLY in the active view
             // Determine active view container
@@ -4540,7 +4509,6 @@
                 console.warn(`⚠️ Aucune vue active trouvée (.step-view.active)`);
                 return;
             }
-            console.log(`📍 Vue active: ${activeView.id}`);
             
             visualStepOrder.forEach((step, i) => {
                 // Query ONLY within the active view to avoid duplicate elements
@@ -4554,15 +4522,12 @@
 
                 if (i < stepIndex) {
                     el.classList.add('complete');
-                    console.log(`✅ ${step} → complete`);
                 } else if (i === stepIndex) {
                     el.classList.add('active');
-                    console.log(`🔵 ${step} → active`);
                 }
             });
             
             currentStep = stepName;
-            console.log(`✅ currentStep mis à jour: "${currentStep}"`);
 
             // Update status messages and icons based on step
             const downloadLabel = currentSourceType === 'local' ? 'Chargement du fichier' : 'Téléchargement de la vidéo';
@@ -4668,8 +4633,6 @@
         let allClipsData = []; // Store all clips data with metadata
 
         function showResults(clips) {
-            console.log('🎬 showResults() appelé');
-            console.log('🎬 Clips reçus:', clips);
             
             try {
                 // ✨ Re-query DOM elements pour éviter les références obsolètes
@@ -4677,8 +4640,6 @@
                 const clipsGridElement = document.getElementById('clipsGrid');
                 const resultsCountElement = document.getElementById('resultsCount');
                 
-                console.log('🎬 results element:', resultsElement);
-                console.log('🎬 clipsGrid element:', clipsGridElement);
                 
                 if (!clipsGridElement) {
                     const errorMsg = 'ERREUR CRITIQUE: clipsGrid introuvable dans le DOM!';
@@ -4722,20 +4683,17 @@
                         });
                     } else {
                         // New format: array of objects with metadata
-                        console.log('✅ Format avec métadonnées détecté');
                         allClipsData = clips;
                     }
                 } else {
                     allClipsData = [];
                 }
                 
-                console.log('🎬 allClipsData créé:', allClipsData);
                 
                 // ✨ Appels avec gestion d'erreur complète
                 updateResultsStats();
                 renderClips(allClipsData);
                 
-                console.log('✅ showResults() terminé avec succès');
                 
             } catch (err) {
                 console.error('❌ Erreur showResults:', err);
@@ -4766,14 +4724,12 @@
         }
 
         function renderClips(clipsToShow) {
-            console.log('🎨 renderClips() appelé avec:', clipsToShow);
             
             try {
                 // ✨ Re-query DOM elements pour éviter les références obsolètes
                 const clipsGridElement = document.getElementById('clipsGrid');
                 const resultsCountElement = document.getElementById('resultsCount');
                 
-                console.log('🎨 clipsGrid:', clipsGridElement);
                 
                 if (!clipsGridElement) {
                     const errorMsg = 'ERREUR CRITIQUE: clipsGrid element non trouvé dans renderClips()!';
@@ -4795,7 +4751,6 @@
                 clipsGridElement.innerHTML = '';
                 
                 clipsToShow.forEach((clip, cardIndex) => {
-                    console.log(`🎨 [${cardIndex}] Création carte pour clip ${clip.index + 1}:`, clip);
                     
                     const card = document.createElement('div');
                     card.className = 'clip-card';
@@ -4833,7 +4788,6 @@
                         </div>
                     `;
                 clipsGridElement.appendChild(card);
-                console.log(`🎨 [${cardIndex}] Carte ajoutée au DOM`);
                 
                 // Setup click-to-play/pause functionality
                 const videoElement = card.querySelector('video');
@@ -4882,7 +4836,6 @@
                 
                 // Force load first frame for poster display
                 videoElement.addEventListener('loadedmetadata', function() {
-                    console.log('✓ Vidéo chargée:', clip.url);
                     // Set to a small time offset to force display of first frame
                     videoElement.currentTime = 0.1;
                 });
@@ -4897,7 +4850,6 @@
                 });
             });
             
-            console.log(`✅ ${clipsToShow.length} cartes créées avec succès`);
             
         } catch (err) {
             console.error('❌ Erreur renderClips:', err);
@@ -4982,7 +4934,6 @@
                 card.style.opacity = '0.5';
             });
             
-            console.log('🔒 Interface verrouillée - Processing en cours');
         }
 
         // Déverrouiller tous les boutons après le processing
@@ -5023,7 +4974,6 @@
             // Mettre à jour l'état du bouton source selon les conditions
             updateSourceNextButton();
             
-            console.log('🔓 Interface déverrouillée - Processing terminé');
         }
 
         // Form submit
@@ -5069,7 +5019,6 @@
                 params.video_path = window.analysisData.video_path;
                 params.analysis_job_id = window.analysisData.job_id;  // Pour récupérer la transcription 'base'
                 params.skip_download = true;  // Vidéo déjà téléchargée
-                console.log('✨ Réutilisation analyse (job: ' + params.analysis_job_id + ')');
             }
 
             // Initialize progress (skip download step if video already analyzed)
@@ -5094,7 +5043,6 @@
                 ? { file_path: params.video_path || selectedFilePath, ...params }
                 : { url: document.getElementById('url')?.value?.trim() || '', ...params };
             
-            console.log(`🔍 Endpoint: ${endpoint}, Payload:`, requestBody);
 
             fetch(endpoint, {
                 method: 'POST',
@@ -5173,7 +5121,6 @@
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && currentStep) {
                 // L'onglet redevient visible et on a un processus en cours
-                console.log(`👁️ Onglet redevenu visible, refresh UI pour step: ${currentStep}`);
                 
                 // Force un re-render des progress pills en retirant le check "skip if same"
                 const previousStep = currentStep;

@@ -141,18 +141,6 @@ class LogCapture:
 def process_video(job_id: str, url: str, options: dict):
     """Traite une vidéo YouTube ou locale en arrière-plan"""
     
-    # === DEBUG LOG FICHIER ===
-    import datetime
-    debug_log = Path(__file__).parent / "process_video_debug.log"
-    def debug(msg):
-        with open(debug_log, "a") as f:
-            f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
-    
-    debug(f"{'='*60}")
-    debug(f"NOUVELLE GÉNÉRATION - Job ID: {job_id}")
-    debug(f"URL: {url}")
-    debug(f"Options: {options}")
-    
     # === LAZY IMPORTS (chargés ici pour démarrage rapide de Flask) ===
     from src.downloader import VideoDownloader
     from src.viral_detector import ViralMoment, ViralMomentDetector
@@ -160,8 +148,6 @@ def process_video(job_id: str, url: str, options: dict):
     from src.subtitles import SubtitleGenerator
     from src.ai_analyzer import TranscriptSegment, analyze_with_ai
     from src.auto_config import AutoConfigurator, GeneratedConfig
-    
-    debug("Imports OK")
     
     logger = LogCapture(job_id)
     jobs[job_id] = {"status": "running", "clips": [], "error": None}
@@ -172,13 +158,9 @@ def process_video(job_id: str, url: str, options: dict):
     transcription_result = None  # Sera récupéré du job d'analyse si disponible
     
     try:
-        debug("Début du try block")
-        
         # Vérifier si c'est un fichier local ou une URL YouTube
         local_file = options.get('local_file')
         skip_download = options.get('skip_download', False)
-        
-        debug(f"local_file: {local_file}, skip_download: {skip_download}")
         
         # Si on réutilise une analyse, commencer directement à l'étape "generate"
         if skip_download and local_file:
@@ -186,7 +168,6 @@ def process_video(job_id: str, url: str, options: dict):
             is_uploaded = True
             
             if not Path(video_path).exists():
-                debug(f"ERREUR: Fichier introuvable: {video_path}")
                 raise Exception("Fichier introuvable")
             
             # Démarrer directement à "generate" avec 5% pour initialiser la barre bleue
@@ -595,46 +576,23 @@ def process_video(job_id: str, url: str, options: dict):
             clips_to_delete = []  # Ne pas supprimer si la copie a échoué
         
         # Convertir les chemins en URLs relatives + extraire métadonnées
-        # LOG FICHIER POUR DEBUG
-        import datetime
-        debug_log = Path(__file__).parent / "metadata_extraction_debug.log"
-        with open(debug_log, "a") as f:
-            f.write(f"\n{'='*60}\n[{datetime.datetime.now()}] EXTRACTION MÉTADONNÉES\n")
-            f.write(f"Nombre de clips à traiter: {len(clips)}\n")
-            f.write(f"Downloads dir: {downloads_dir}\n")
-        
         clip_data = []
         for i, clip_path in enumerate(clips):
             try:
                 clip_file = Path(clip_path)
                 
-                with open(debug_log, "a") as f:
-                    f.write(f"\n--- Clip {i+1}/{len(clips)} ---\n")
-                    f.write(f"Chemin original: {clip_path}\n")
-                    f.write(f"Nom fichier: {clip_file.name}\n")
-                
                 # Les clips ont été copiés vers Downloads, chercher là-bas
                 downloads_clip = downloads_dir / clip_file.name
-                
-                with open(debug_log, "a") as f:
-                    f.write(f"Chemin Downloads: {downloads_clip}\n")
-                    f.write(f"Existe? {downloads_clip.exists()}\n")
                 
                 # Vérifier que le fichier existe dans Downloads
                 if not downloads_clip.exists():
                     logger.log(f"⚠️ Clip introuvable dans Downloads: {downloads_clip}", "warning", "complete", 100)
-                    with open(debug_log, "a") as f:
-                        f.write(f"ERREUR: Clip introuvable!\n")
                     # Fallback: essayer dans output/ (si copie a échoué)
                     if clip_file.exists():
                         downloads_clip = clip_file
                         logger.log(f"  → Utilisation depuis output/: {clip_file}", "info", "complete", 100)
-                        with open(debug_log, "a") as f:
-                            f.write(f"Fallback vers output/: {clip_file}\n")
                     else:
                         logger.log(f"⚠️ Clip introuvable partout, skip", "warning", "complete", 100)
-                        with open(debug_log, "a") as f:
-                            f.write(f"SKIP - introuvable partout\n")
                         continue
                 
                 # Extraire les métadonnées du fichier dans Downloads
@@ -645,10 +603,6 @@ def process_video(job_id: str, url: str, options: dict):
                     "index": i,
                     "size": round(downloads_clip.stat().st_size / (1024 * 1024), 1),  # MB
                 }
-                
-                with open(debug_log, "a") as f:
-                    f.write(f"URL générée: {metadata['url']}\n")
-                    f.write(f"Taille: {metadata['size']} MB\n")
                 
                 # Extraire durée et score à partir du nom de fichier ou via ffprobe
                 try:
@@ -749,27 +703,14 @@ def process_video(job_id: str, url: str, options: dict):
     except Exception as e:
         import traceback
         error_msg = str(e)
-        debug(f"EXCEPTION: {error_msg}")
-        debug(f"TRACEBACK:\n{traceback.format_exc()}")
         logger.log(f"ERREUR: {error_msg}", "error", "error", 0)
         logger.log(traceback.format_exc(), "error", "error", 0)
         jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg}
     
     finally:
-        debug("Bloc finally atteint")
-        # === DÉSACTIVÉ: Ne plus supprimer la vidéo dans finally ===
-        # La vidéo doit rester pour permettre de regénérer des clips
-        # is_user_file = options.get('is_user_file', False)
-        # if not is_user_file and video_path and os.path.exists(video_path):
-        #     try:
-        #         os.remove(video_path)
-        #     except:
-        #         pass
-        
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
         time.sleep(2)
         logger.close()
-        debug("FIN process_video()")
 
 
 @app.route('/')
@@ -781,30 +722,15 @@ def index():
 @app.route('/api/process', methods=['POST'])
 def start_process():
     """Démarre le traitement d'une vidéo"""
-    # === DEBUG LOG ===
-    import datetime
-    debug_log = Path(__file__).parent / "api_process_debug.log"
-    with open(debug_log, "a") as f:
-        f.write(f"\n[{datetime.datetime.now()}] /api/process appelé\n")
-    
     data = request.json
     url = data.get('url', '').strip()
     video_path = data.get('video_path', '').strip()
     
-    with open(debug_log, "a") as f:
-        f.write(f"URL: {url}\n")
-        f.write(f"video_path: {video_path}\n")
-        f.write(f"data keys: {list(data.keys())}\n")
-    
     # Accepter soit une URL YouTube, soit un video_path pré-téléchargé
     if not url and not video_path:
-        with open(debug_log, "a") as f:
-            f.write("ERREUR: URL ou video_path requis\n")
         return jsonify({"error": "URL ou video_path requis"}), 400
     
     if url and 'youtube.com' not in url and 'youtu.be' not in url:
-        with open(debug_log, "a") as f:
-            f.write(f"ERREUR: URL YouTube invalide: {url}\n")
         return jsonify({"error": "URL YouTube invalide"}), 400
     
     # Générer un ID unique
@@ -982,32 +908,14 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
 @app.route('/api/process-local', methods=['POST'])
 def start_process_local():
     """Démarre le traitement d'un fichier vidéo local (chemin direct)"""
-    import datetime
-    debug_log = Path(__file__).parent / "process_local_debug.log"
-    
     data = request.json
     file_path = data.get('file_path', '').strip()
-    
-    # === DEBUG LOG ===
-    with open(debug_log, "a") as f:
-        f.write(f"\n[{datetime.datetime.now()}] /api/process-local appelé\n")
-        f.write(f"  file_path reçu: '{file_path}'\n")
-        f.write(f"  file_path existe: {Path(file_path).exists() if file_path else 'N/A'}\n")
-        # Lister les fichiers dans downloads/
-        downloads_path = Path(__file__).parent / "downloads"
-        if downloads_path.exists():
-            files = list(downloads_path.glob('*'))
-            f.write(f"  Fichiers dans downloads/: {[str(f.name) for f in files]}\n")
-        else:
-            f.write(f"  downloads/ n'existe pas\n")
     
     if not file_path:
         return jsonify({"error": "Chemin du fichier requis"}), 400
     
     # Vérifier que le fichier existe
     if not Path(file_path).exists():
-        with open(debug_log, "a") as f:
-            f.write(f"  ERREUR: Fichier introuvable!\n")
         return jsonify({"error": "Fichier introuvable"}), 400
     
     # Vérifier l'extension
@@ -1464,41 +1372,12 @@ def serve_output(filename: str):
 @app.route('/clips/<path:filename>')
 def serve_clips(filename: str):
     """Sert les clips finaux depuis ~/Downloads (~/Téléchargements sur Mac FR)"""
-    # LOG FICHIER POUR DEBUG
-    import datetime
-    debug_log = Path(__file__).parent / "serve_clips_debug.log"
-    with open(debug_log, "a") as f:
-        f.write(f"\n[{datetime.datetime.now()}] REQUEST: /clips/{filename}\n")
-    
     # Déterminer le dossier Downloads selon l'OS et la langue
     downloads_dir = Path.home() / 'Downloads'
     
     # Sur Mac avec locale française, le dossier peut être "Téléchargements"
     if not downloads_dir.exists():
         downloads_dir = Path.home() / 'Téléchargements'
-    
-    # Si toujours pas trouvé, essayer les alternatives
-    if not downloads_dir.exists():
-        downloads_dir = Path.home() / 'Téléchargements'  # Accent français
-    
-    file_path = downloads_dir / filename
-    
-    # Log pour tracer les requêtes
-    with open(debug_log, "a") as f:
-        if file_path.exists():
-            msg = f"✅ Fichier trouvé: {filename} ({file_path.stat().st_size} bytes)\n"
-            print(msg.strip())
-            f.write(msg)
-        else:
-            msg = f"❌ Fichier INTROUVABLE: {filename}\n   Chemin: {file_path}\n   Downloads existe: {downloads_dir.exists()}\n"
-            print(msg.strip())
-            f.write(msg)
-            if downloads_dir.exists():
-                # Lister les fichiers disponibles pour debug
-                available = list(downloads_dir.glob('*.mp4'))[:5]
-                avail_msg = f"   Fichiers .mp4 disponibles: {[f.name for f in available]}\n"
-                print(avail_msg.strip())
-                f.write(avail_msg)
     
     # Déterminer le type MIME
     mimetype = None
