@@ -494,22 +494,28 @@ def process_video(job_id: str, url: str, options: dict):
             home = PathLib.home()
             downloads_dir = home / "Downloads"
             
-            logger.log(f"Copie des clips vers {downloads_dir}...", "info", "complete", 100)
+            logger.log(f"Déplacement des clips vers {downloads_dir}...", "info", "complete", 100)
             
-            copied_count = 0
+            moved_count = 0
+            clips_to_delete = []  # Liste des clips à supprimer après extraction métadonnées
+            
             for clip_path in clips:
                 src = Path(clip_path)
                 dst = downloads_dir / src.name
                 
                 if src.exists():
+                    # Copier vers Downloads
                     shutil.copy2(src, dst)
-                    copied_count += 1
+                    moved_count += 1
+                    # Marquer pour suppression après extraction métadonnées
+                    clips_to_delete.append(src)
                     logger.log(f"✓ {src.name} → Téléchargements", "success", "complete", 100)
             
-            logger.log(f"{copied_count} clips copiés dans Téléchargements", "success", "complete", 100)
+            logger.log(f"{moved_count} clips déplacés dans Téléchargements", "success", "complete", 100)
             
         except Exception as e:
-            logger.log(f"Avertissement: impossible de copier vers Téléchargements: {e}", "warning", "complete", 100)
+            logger.log(f"Avertissement: impossible de déplacer vers Téléchargements: {e}", "warning", "complete", 100)
+            clips_to_delete = []  # Ne pas supprimer si la copie a échoué
         
         # Convertir les chemins en URLs relatives + extraire métadonnées
         clip_data = []
@@ -567,6 +573,22 @@ def process_video(job_id: str, url: str, options: dict):
         
         logger.log(f"📊 {len(clip_data)} clips prêts avec métadonnées", "success", "complete", 100)
         jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None}
+        
+        # === SUPPRESSION DES CLIPS DU DOSSIER OUTPUT ===
+        # Les clips sont maintenant dans ~/Téléchargements, on peut nettoyer output/
+        if clips_to_delete:
+            logger.log("Nettoyage du dossier output/...", "info", "complete", 100)
+            deleted_count = 0
+            for clip_file in clips_to_delete:
+                try:
+                    if clip_file.exists():
+                        clip_file.unlink()
+                        deleted_count += 1
+                except Exception as e:
+                    logger.log(f"⚠️ Impossible de supprimer {clip_file.name}: {e}", "warning", "complete", 100)
+            
+            if deleted_count > 0:
+                logger.log(f"🗑️ {deleted_count} clips supprimés d'output/ (disponibles dans Téléchargements)", "success", "complete", 100)
         
         # Nettoyage des fichiers sources (sauf fichiers utilisateur)
         is_user_file = options.get('is_user_file', False)
