@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test complet du pipeline ClipGenius v2.0
+Test complet du pipeline ClipGenius beta
 
 Ce script teste tous les modules du pipeline sans nécessiter de vidéo externe.
 Il vérifie que les imports et les logiques fonctionnent correctement.
@@ -305,7 +305,7 @@ def test_main_cli() -> List[TestResult]:
             name="CLI main function",
             success=len(missing) == 0,
             message=f"{len(params)} paramètres CLI",
-            details=f"Manquants: {missing}" if missing else "Tous les params v2.0 présents"
+            details=f"Manquants: {missing}" if missing else "Tous les params présents"
         ))
         
     except Exception as e:
@@ -325,7 +325,7 @@ def run_all_tests(quick: bool = False) -> Tuple[int, int]:
     Returns:
         Tuple (succès, échecs)
     """
-    console.print(Panel("[bold cyan]ClipGenius v2.0 - Test Suite[/bold cyan]", 
+    console.print(Panel("[bold cyan]ClipGenius beta - Test Suite[/bold cyan]", 
                         border_style="cyan"))
     
     all_results = []
@@ -390,7 +390,7 @@ def run_all_tests(quick: bool = False) -> Tuple[int, int]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test du pipeline ClipGenius v2.0")
+    parser = argparse.ArgumentParser(description="Test du pipeline ClipGenius beta")
     parser.add_argument("--quick", action="store_true", help="Test rapide (imports seulement)")
     parser.add_argument("--with-video", type=str, help="Tester avec une vraie vidéo")
     

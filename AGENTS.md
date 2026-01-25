@@ -4,7 +4,7 @@ This file provides guidance to coding agents working on the ClipGenius repositor
 
 ## Project Overview
 
-ClipGenius v2.0 is a viral clip generator that transforms YouTube videos or local files into vertical 9:16 clips optimized for TikTok, Instagram Reels, and YouTube Shorts. It uses AI analysis (GPT-4o-mini or local Phi-4-mini), Whisper transcription, MediaPipe face detection, and advanced audio/video processing.
+ClipGenius beta is a viral clip generator that transforms YouTube videos or local files into vertical 9:16 clips optimized for TikTok, Instagram Reels, and YouTube Shorts. It uses AI analysis (GPT-4o-mini or local Phi-4-mini), Whisper transcription, MediaPipe face detection, and advanced audio/video processing.
 
 **Tech Stack:** Python 3.9+, MoviePy, OpenCV, MediaPipe, Whisper, FFmpeg, Click, Rich
 

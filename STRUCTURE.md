@@ -204,5 +204,5 @@ python build_mac.py         # Build .app seulement
 ---
 
 **Dernière mise à jour** : 25 janvier 2026
-**Version** : 2.0
+**Version** : beta
 **Mainteneur** : ClipGenius Team

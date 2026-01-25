@@ -127,7 +127,7 @@ def download_phi_model(progress_callback=None) -> Optional[Path]:
     
     try:
         req = urllib.request.Request(model_url)
-        req.add_header('User-Agent', 'ClipGenius/2.0')
+        req.add_header('User-Agent', 'ClipGenius/beta')
         
         with urllib.request.urlopen(req, timeout=30) as response:
             total = int(response.headers.get('Content-Length', model_size * 1024 * 1024))
@@ -570,7 +570,7 @@ def run_main_app():
 def main():
     """Point d'entrée principal"""
     print("\n" + "="*50)
-    print("  ClipGenius v2.0")
+    print("  ClipGenius beta")
     print("="*50 + "\n")
     
     # Vérifier/télécharger le modèle AI au premier démarrage

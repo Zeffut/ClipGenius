@@ -5,7 +5,7 @@ Toutes les modifications notables de ce projet seront documentées ici.
 Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
 et ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [2.0.0] - 2026-01-22
+## [beta] - 2026-01-22
 
 ### 🎉 Refonte Majeure - Interface Web Native
 
@@ -30,7 +30,7 @@ et ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 - **Valeurs optimales hardcodées** : 1080p, score 0.75, Whisper turbo
 - **Détection preset améliorée** : Favorise presets spécifiques sur vlog générique
 - **Vocabulaire massif** : Gaming 350+ mots, Vlog 200+, Podcast 170+
-- **README.md complet** avec nouvelle documentation v2.0
+- **README.md complet** avec nouvelle documentation
 
 #### Supprimé
 - **main.py** (CLI obsolète, remplacé par interface web)
@@ -56,7 +56,7 @@ et ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 - **Détection preset heuristique** : Tutoriel détecté en priorité
 - **Performance background** : Traitement vidéo non ralenti par UI
 
-### 📊 Statistiques v2.0
+### 📊 Statistiques
 - **~14,500 lignes** de code Python
 - **~4,500 lignes** HTML/CSS/JavaScript
 - **16 modules** dans src/

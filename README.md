@@ -1,4 +1,4 @@
-# ClipGenius v2.0 - Générateur de Clips Viraux
+# ClipGenius beta - Générateur de Clips Viraux
 
 Application native 100% locale qui transforme automatiquement des vidéos YouTube ou locales en clips viraux optimisés pour TikTok, Instagram Reels et YouTube Shorts.
 
