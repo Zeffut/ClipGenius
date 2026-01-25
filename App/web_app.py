@@ -351,14 +351,15 @@ def process_video(job_id: str, url: str, options: dict):
                         video_duration=video_duration,
                         min_duration=min_duration,
                         max_duration=max_duration,
-                        max_clips=max_clips or 10,
+                        max_clips=max_clips or 5,  # Défaut réduit de 10 à 5
+                        min_viral_score=min_score,  # Propager le seuil utilisateur
                         video_path=video_path,
                         progress_callback=ai_progress_callback
                     )
 
                     logger.log(f"IA a retourné {len(ai_moments)} moments", "info", "analyze", 95)
 
-                    # Convertir tous les moments
+                    # Convertir tous les moments (déjà filtrés par min_viral_score)
                     all_moments = [
                         ViralMoment(
                             start_time=ai_m.start_time,
@@ -369,18 +370,13 @@ def process_video(job_id: str, url: str, options: dict):
                         for ai_m in ai_moments
                     ]
 
-                    # Filtrer par score minimum
-                    moments = [m for m in all_moments if m.score >= min_score]
+                    # Les moments sont déjà filtrés par l'analyseur, pas besoin de re-filtrer
+                    moments = all_moments
 
                     if moments:
-                        logger.log(f"{len(moments)} moments retenus (score >= {min_score})", "info", "analyze", 98)
-                    elif all_moments:
-                        # Aucun ne passe le filtre → prendre le meilleur quand même
-                        best = max(all_moments, key=lambda m: m.score)
-                        moments = [best]
-                        logger.log(f"Aucun moment >= {min_score}, meilleur: {best.score:.0%}", "warning", "analyze", 98)
+                        logger.log(f"{len(moments)} moments viraux détectés", "info", "analyze", 98)
                     else:
-                        logger.log("L'IA n'a trouvé aucun moment", "warning", "analyze", 98)
+                        logger.log("L'IA n'a trouvé aucun moment suffisamment viral", "warning", "analyze", 98)
 
             except Exception as e:
                 logger.log(f"Erreur analyse IA: {e}", "error", "analyze", 90)

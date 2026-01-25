@@ -125,7 +125,8 @@ Réponds avec CE FORMAT JSON EXACT:
         n_threads: Optional[int] = None,
         min_clip_duration: float = 30.0,
         max_clip_duration: float = 90.0,
-        max_clips: int = 10,
+        max_clips: int = 5,  # Réduit de 10 à 5 pour éviter trop de clips
+        min_viral_score: float = 0.70,  # Seuil minimum de qualité
     ):
         """
         Initialise l'analyseur local.
@@ -135,7 +136,8 @@ Réponds avec CE FORMAT JSON EXACT:
             n_threads: Nombre de threads CPU
             min_clip_duration: Durée minimum des clips
             max_clip_duration: Durée maximum des clips
-            max_clips: Nombre maximum de clips
+            max_clips: Nombre maximum de clips (défaut: 5)
+            min_viral_score: Score minimum pour qu'un moment soit retenu (défaut: 0.70)
         """
         from .local_llm import LocalLLM
 
@@ -143,6 +145,7 @@ Réponds avec CE FORMAT JSON EXACT:
         self.min_clip_duration = min_clip_duration
         self.max_clip_duration = max_clip_duration
         self.max_clips = max_clips
+        self.min_viral_score = min_viral_score
 
     def analyze(
         self,
@@ -312,27 +315,28 @@ Voici la transcription de la SECTION {section_num}/{total_sections} (durée: {se
 {section_transcript}
 
 MISSION:
-Identifie les 3 à 5 MEILLEURS moments viraux de cette section (30-90s chacun).
+Identifie les 2 à 3 MEILLEURS moments viraux de cette section (30-90s chacun).
+Sois TRÈS SÉLECTIF - ne retiens que les moments vraiment exceptionnels.
 
-CRITÈRES:
-- Accroche forte au début du moment
-- Émotion claire (humour, surprise, tension, inspiration)
-- Message complet et autonome
-- Potentiel de partage élevé
+CRITÈRES STRICTS:
+- Accroche TRÈS forte au début (doit capter l'attention en 3s)
+- Émotion intense (humour fort, surprise majeure, tension palpable)
+- Message complet et autonome (compréhensible hors contexte)
+- Fort potentiel de partage et d'engagement
 
 INSTRUCTIONS:
 1. Analyse TOUTE cette section
-2. Repère les 3-5 moments les plus intéressants
-3. Pour chaque moment, donne le timestamp de début et fin
-4. Score entre 0.0 et 1.0 (sois généreux, inclure > 0.5)
+2. Repère les 2-3 moments les plus EXCEPTIONNELS uniquement
+3. Score: 0.85+ = viral assuré, 0.70-0.85 = bon potentiel, <0.70 = ne pas inclure
+4. Ne retourne QUE les moments avec score >= 0.70
 
-FORMAT JSON EXACT (tableau de 3-5 moments):
+FORMAT JSON EXACT (tableau de 2-3 moments max):
 [
-  {{"start": 15, "end": 65, "score": 0.85, "hook": "phrase accrocheuse", "emotion": "humour", "reason": "explication courte"}},
-  {{"start": 120, "end": 180, "score": 0.78, "hook": "autre phrase", "emotion": "surprise", "reason": "pourquoi viral"}}
+  {{"start": 15, "end": 65, "score": 0.88, "hook": "phrase accrocheuse", "emotion": "humour", "reason": "explication courte"}},
+  {{"start": 120, "end": 180, "score": 0.75, "hook": "autre phrase", "emotion": "surprise", "reason": "pourquoi viral"}}
 ]
 
-Retourne UNIQUEMENT le tableau JSON (3-5 moments), rien d'autre.<|end|>
+Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 <|assistant|>
 """
         
@@ -634,52 +638,105 @@ Retourne UNIQUEMENT le tableau JSON (3-5 moments), rien d'autre.<|end|>
         moments: List[ViralMomentAI],
         video_duration: float
     ) -> List[ViralMomentAI]:
-        """Valide et filtre les moments détectés"""
+        """
+        Valide, fusionne et filtre les moments détectés.
+        
+        Améliorations:
+        - Utilise self.min_viral_score au lieu d'un seuil hardcodé
+        - Fusionne les moments adjacents/chevauchants
+        - Seuil de chevauchement plus strict (30% au lieu de 50%)
+        """
 
         if not moments:
             return []
 
-        # Trier par score décroissant
-        moments.sort(key=lambda x: x.score, reverse=True)
-
-        valid = []
-        min_score = 0.5  # Seuil pour garantir la qualité (avec sections, on a déjà beaucoup de clips)
-        used_ranges = []  # Pour éviter les chevauchements
-
+        # Trier par temps de début pour faciliter la fusion
+        moments.sort(key=lambda x: x.start_time)
+        
+        # === ÉTAPE 1: Fusion des moments adjacents/chevauchants ===
+        merged = []
         for moment in moments:
-            # Vérifier les limites temporelles
             start = max(0, moment.start_time)
             end = min(video_duration, moment.end_time)
+            
+            if not merged:
+                merged.append(ViralMomentAI(
+                    start_time=start,
+                    end_time=end,
+                    score=moment.score,
+                    hook=moment.hook,
+                    reason=moment.reason,
+                    emotion=moment.emotion
+                ))
+                continue
+            
+            last = merged[-1]
+            # Fusionner si chevauchement > 10s ou écart < 5s
+            gap = start - last.end_time
+            if gap < 5:  # Moins de 5s d'écart = fusionner
+                # Étendre le moment précédent
+                new_end = max(last.end_time, end)
+                # Limiter à max_clip_duration
+                if new_end - last.start_time <= self.max_clip_duration * 1.2:
+                    last.end_time = new_end
+                    # Garder le meilleur score
+                    if moment.score > last.score:
+                        last.score = moment.score
+                        last.hook = moment.hook
+                        last.reason = moment.reason
+                    continue
+            
+            # Pas de fusion, ajouter comme nouveau moment
+            merged.append(ViralMomentAI(
+                start_time=start,
+                end_time=end,
+                score=moment.score,
+                hook=moment.hook,
+                reason=moment.reason,
+                emotion=moment.emotion
+            ))
+        
+        # === ÉTAPE 2: Trier par score décroissant ===
+        merged.sort(key=lambda x: x.score, reverse=True)
+        
+        # === ÉTAPE 3: Filtrer par score et chevauchement ===
+        valid = []
+        used_ranges = []
+
+        for moment in merged:
+            start = moment.start_time
+            end = moment.end_time
             duration = end - start
 
-            # Vérifier la durée
+            # Vérifier la durée minimum
             if duration < self.min_clip_duration * 0.5:
                 continue
-            if duration > self.max_clip_duration * 1.5:
-                # Tronquer si trop long
+            
+            # Tronquer si trop long
+            if duration > self.max_clip_duration * 1.2:
                 end = start + self.max_clip_duration
                 duration = end - start
 
-            # Vérifier le score
-            if moment.score < min_score:
+            # Vérifier le score (utilise le seuil configuré, pas un hardcodé)
+            if moment.score < self.min_viral_score:
                 continue
 
-            # Vérifier le chevauchement avec les moments déjà sélectionnés
+            # Vérifier le chevauchement (seuil strict: 30%)
             overlap = False
             for used_start, used_end in used_ranges:
-                # Chevauchement si plus de 50% en commun
                 overlap_start = max(start, used_start)
                 overlap_end = min(end, used_end)
                 if overlap_end > overlap_start:
                     overlap_duration = overlap_end - overlap_start
-                    if overlap_duration > duration * 0.5:
+                    # Rejet si > 30% de chevauchement (plus strict que 50%)
+                    if overlap_duration > duration * 0.3:
                         overlap = True
                         break
             
             if overlap:
                 continue
 
-            # Ajouter le moment
+            # Ajouter le moment validé
             moment.start_time = start
             moment.end_time = end
             valid.append(moment)
@@ -689,12 +746,11 @@ Retourne UNIQUEMENT le tableau JSON (3-5 moments), rien d'autre.<|end|>
             if len(valid) >= self.max_clips:
                 break
 
-        # Si aucun moment valide mais on a des candidats, prendre le meilleur
-        if not valid and moments:
-            best = moments[0]
+        # Fallback: si aucun moment valide, prendre le meilleur candidat
+        if not valid and merged:
+            best = merged[0]
             best.start_time = max(0, best.start_time)
             best.end_time = min(video_duration, best.end_time)
-            # S'assurer de la durée
             if best.end_time - best.start_time < self.min_clip_duration:
                 best.end_time = min(video_duration, best.start_time + self.min_clip_duration)
             console.print(f"[dim]Fallback: meilleur score {best.score:.0%}[/dim]")
@@ -710,7 +766,8 @@ def analyze_with_ai(
     video_duration: float,
     min_duration: float = 30.0,
     max_duration: float = 90.0,
-    max_clips: int = 10,
+    max_clips: int = 5,
+    min_viral_score: float = 0.70,
     model_path: Optional[str] = None,
     video_path: Optional[str] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None
@@ -726,7 +783,8 @@ def analyze_with_ai(
         video_duration: Durée de la vidéo
         min_duration: Durée min des clips
         max_duration: Durée max des clips
-        max_clips: Nombre max de clips
+        max_clips: Nombre max de clips (défaut: 5)
+        min_viral_score: Score minimum pour retenir un moment (défaut: 0.70)
         model_path: Chemin vers le modèle (optionnel, auto-detect)
         video_path: Chemin vers la vidéo (optionnel)
         progress_callback: Callback optionnel (progress: float 0-1, message: str)
@@ -740,7 +798,8 @@ def analyze_with_ai(
             model_path=model_path,
             min_clip_duration=min_duration,
             max_clip_duration=max_duration,
-            max_clips=max_clips
+            max_clips=max_clips,
+            min_viral_score=min_viral_score
         )
         return analyzer.analyze(
             segments, 
