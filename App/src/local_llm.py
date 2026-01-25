@@ -269,12 +269,13 @@ class LocalLLM:
         """Cherche le modèle GGUF dans les emplacements courants (Phi-4 prioritaire)"""
         # Noms possibles du modèle - Phi-4 en priorité, puis Phi-3 en fallback
         model_names = [
-            # Phi-4-mini (recommandé)
+            # Phi-4-mini (recommandé) - différentes conventions de nommage
+            "Phi-4-mini-instruct.Q4_K_M.gguf",    # Format HuggingFace standard
             "Phi-4-mini-instruct-Q4_K_M.gguf",
             "Phi-4-mini-instruct-q4_k_m.gguf",
+            "phi-4-mini-instruct.Q4_K_M.gguf",
             "phi-4-mini-instruct-Q4_K_M.gguf",
             "phi-4-mini-instruct-q4_k_m.gguf",
-            "Phi-4-mini-instruct.Q4_K_M.gguf",
             "Phi-4-mini-Q4_K_M.gguf",
             "phi4-mini-instruct-q4.gguf",
             # Phi-3-mini (fallback)
