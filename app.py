@@ -31,6 +31,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 # =============================================================================
 
 MODELS_DIR = "models"
+# Phi-4-mini-instruct (recommandé, meilleure qualité)
+PHI4_MODEL_NAME = "Phi-4-mini-instruct.Q4_K_M.gguf"
+PHI4_MODEL_URL = "https://huggingface.co/bartowski/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf"
+PHI4_MODEL_SIZE_MB = 2400
+# Fallback: Phi-3-mini (plus petit, moins performant)
 PHI3_MODEL_NAME = "Phi-3-mini-4k-instruct-q4.gguf"
 PHI3_MODEL_URL = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
 PHI3_MODEL_SIZE_MB = 2300
@@ -48,32 +53,59 @@ def get_models_dir() -> Path:
     return models_dir
 
 
-def find_phi3_model() -> Optional[Path]:
-    """Cherche le modèle Phi-3 dans les emplacements connus"""
+def find_phi_model() -> Optional[Path]:
+    """Cherche le modèle Phi (4 en priorité, puis 3 en fallback) dans les emplacements connus"""
     search_dirs = [
         get_project_root() / MODELS_DIR,
         get_project_root(),
         Path.home() / ".cache" / "clipgenius",
         Path.home() / ".cache" / "huggingface",
     ]
-    names = [
+    # Phi-4 en priorité (meilleure qualité)
+    phi4_names = [
+        "Phi-4-mini-instruct.Q4_K_M.gguf",
+        "Phi-4-mini-instruct-Q4_K_M.gguf",
+        "phi-4-mini-instruct-Q4_K_M.gguf",
+        "phi-4-mini-instruct-q4_k_m.gguf",
+        "phi4-mini-instruct-q4.gguf",
+    ]
+    # Phi-3 en fallback
+    phi3_names = [
         "Phi-3-mini-4k-instruct-q4.gguf",
         "phi-3-mini-4k-instruct-q4.gguf",
         "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
     ]
+    
+    # Chercher Phi-4 d'abord
     for directory in search_dirs:
         if not directory.exists():
             continue
-        for name in names:
+        for name in phi4_names:
             model_path = directory / name
             if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
                 return model_path
+    
+    # Fallback sur Phi-3
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        for name in phi3_names:
+            model_path = directory / name
+            if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
+                return model_path
+    
     return None
 
 
-def download_phi3_model(progress_callback=None) -> Optional[Path]:
+# Alias pour compatibilité
+def find_phi3_model() -> Optional[Path]:
+    """Alias pour find_phi_model (compatibilité)"""
+    return find_phi_model()
+
+
+def download_phi_model(progress_callback=None) -> Optional[Path]:
     """
-    Télécharge le modèle Phi-3 avec progression.
+    Télécharge le modèle Phi-4 (ou Phi-3 en fallback) avec progression.
     
     Args:
         progress_callback: Fonction appelée avec (downloaded_mb, total_mb, speed_mb_s, eta_text)
@@ -82,19 +114,23 @@ def download_phi3_model(progress_callback=None) -> Optional[Path]:
         Path vers le modèle téléchargé, ou None si échec
     """
     models_dir = get_models_dir()
-    model_path = models_dir / PHI3_MODEL_NAME
-    temp_path = models_dir / f"{PHI3_MODEL_NAME}.tmp"
+    
+    # Essayer Phi-4 d'abord
+    model_path = models_dir / PHI4_MODEL_NAME
+    temp_path = models_dir / f"{PHI4_MODEL_NAME}.tmp"
+    model_url = PHI4_MODEL_URL
+    model_size = PHI4_MODEL_SIZE_MB
     
     # Vérifier si déjà présent
     if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
         return model_path
     
     try:
-        req = urllib.request.Request(PHI3_MODEL_URL)
+        req = urllib.request.Request(model_url)
         req.add_header('User-Agent', 'ClipGenius/2.0')
         
         with urllib.request.urlopen(req, timeout=30) as response:
-            total = int(response.headers.get('Content-Length', PHI3_MODEL_SIZE_MB * 1024 * 1024))
+            total = int(response.headers.get('Content-Length', model_size * 1024 * 1024))
             total_mb = total / (1024 * 1024)
             downloaded = 0
             last_speed_time = time.time()
@@ -175,24 +211,30 @@ def download_phi3_model(progress_callback=None) -> Optional[Path]:
         return None
 
 
-def ensure_phi3_model() -> Optional[Path]:
+# Alias pour compatibilité
+def download_phi3_model(progress_callback=None) -> Optional[Path]:
+    """Alias pour download_phi_model (compatibilité)"""
+    return download_phi_model(progress_callback)
+
+
+def ensure_phi_model() -> Optional[Path]:
     """
-    S'assure que le modèle Phi-3 est disponible.
+    S'assure que le modèle Phi-4 (ou Phi-3) est disponible.
     Le télécharge si nécessaire avec progression console.
     
     Returns:
         Path vers le modèle, ou None si échec
     """
     # Chercher un modèle existant
-    model_path = find_phi3_model()
+    model_path = find_phi_model()
     if model_path:
         return model_path
     
     print("\n" + "="*50)
     print("  Téléchargement du modèle AI (première utilisation)")
     print("="*50 + "\n")
-    print(f"  Modèle: {PHI3_MODEL_NAME}")
-    print(f"  Taille: ~{PHI3_MODEL_SIZE_MB} MB")
+    print(f"  Modèle: {PHI4_MODEL_NAME}")
+    print(f"  Taille: ~{PHI4_MODEL_SIZE_MB} MB")
     print()
     
     def show_progress(downloaded, total, speed, eta):
@@ -206,7 +248,7 @@ def ensure_phi3_model() -> Optional[Path]:
         
         print(f"\r  [{bar}] {pct}% - {downloaded:.0f}/{total:.0f} MB - {speed_text}{eta_text}    ", end="", flush=True)
     
-    result = download_phi3_model(progress_callback=show_progress)
+    result = download_phi_model(progress_callback=show_progress)
     
     if result:
         print("\n\n  ✓ Modèle téléchargé avec succès!\n")
@@ -214,6 +256,12 @@ def ensure_phi3_model() -> Optional[Path]:
         print("\n\n  ✗ Échec du téléchargement\n")
     
     return result
+
+
+# Alias pour compatibilité
+def ensure_phi3_model() -> Optional[Path]:
+    """Alias pour ensure_phi_model (compatibilité)"""
+    return ensure_phi_model()
 
 
 # =============================================================================
@@ -399,6 +447,45 @@ def run_main_app():
     
     from dotenv import load_dotenv
     load_dotenv()
+    
+    # === NETTOYAGE AU DÉMARRAGE ===
+    print("\n🧹 Nettoyage des fichiers résiduels...")
+    
+    # Nettoyer output/
+    output_path = Path('output')
+    output_path.mkdir(exist_ok=True)
+    for pattern in ['*.mp4', '*.webm', '*.mov', '*.avi', '*TEMP_MPY_*', '*.ass', '*_sub.json', '.sanitized_*']:
+        for f in output_path.glob(pattern):
+            try:
+                f.unlink()
+                print(f"  🗑️ Supprimé: output/{f.name}")
+            except:
+                pass
+    
+    # === DÉSACTIVÉ: Ne plus supprimer downloads/ au démarrage ===
+    # La vidéo doit rester disponible entre l'analyse et la génération
+    # downloads_path = Path('downloads')
+    # if downloads_path.exists():
+    #     for video_file in downloads_path.glob('*.mp4'):
+    #         try:
+    #             video_file.unlink()
+    #             print(f"  🗑️ Supprimé: downloads/{video_file.name}")
+    #         except:
+    #             pass
+    print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
+    
+    # Nettoyer temp pycaps
+    import tempfile
+    temp_base = Path(tempfile.gettempdir())
+    for pycaps_dir in temp_base.glob('pycaps_viral_*'):
+        try:
+            import shutil
+            shutil.rmtree(pycaps_dir, ignore_errors=True)
+            print(f"  🗑️ Supprimé: {pycaps_dir.name}")
+        except:
+            pass
+    
+    print("✅ Nettoyage terminé\n")
     
     # === LAZY IMPORT: Charger Flask seulement maintenant ===
     print("⏳ Chargement de l'interface...")

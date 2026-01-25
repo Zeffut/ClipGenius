@@ -67,7 +67,7 @@ Voici la transcription complète d'une vidéo de {duration:.0f}s:
 {transcript}
 
 MISSION:
-Identifie les 5-10 meilleurs moments viraux (30-90s chacun).
+Identifie TOUS les moments viraux potentiels (30-90s chacun).
 
 CRITÈRES:
 - Accroche forte au début du segment
@@ -77,9 +77,10 @@ CRITÈRES:
 
 INSTRUCTIONS:
 1. Lis TOUTE la transcription
-2. Repère les moments avec le plus fort potentiel
+2. Repère TOUS les moments intéressants (pas seulement les meilleurs)
 3. Pour chaque moment, donne le timestamp de début et fin
-4. Score entre 0.0 et 1.0 (seulement les moments > 0.7)
+4. Score entre 0.0 et 1.0 (inclure aussi les moments moyens > 0.5)
+5. Cherche au moins 10-15 moments si la vidéo est longue
 
 FORMAT JSON EXACT (tableau de moments):
 [
@@ -170,71 +171,63 @@ Réponds avec CE FORMAT JSON EXACT:
 
         console.print("[cyan]Analyse locale du contenu (Phi-4-mini)...[/cyan]")
         
-        # Construire la transcription complète avec timestamps
-        full_transcript = self._build_timestamped_transcript(segments)
+        # 🎯 NOUVELLE STRATÉGIE: Découper en sections de ~15 minutes
+        # Pour chaque section → analyse indépendante → 3-5 meilleurs moments
+        # Résultat: Vidéo 1h30 → 6 sections → 18-30 clips au total
         
-        # Estimer le nombre de tokens (~4 chars = 1 token)
-        estimated_tokens = len(full_transcript) // 4
+        SECTION_DURATION = 900  # 15 minutes = 900 secondes
         
-        # 🚀 Obtenir la taille de contexte du LLM chargé
-        try:
-            from .local_llm import LocalLLM
-            llm_context_size = LocalLLM.get_context_size()
-        except:
-            llm_context_size = 8192  # Fallback conservateur
+        # Découper la vidéo en sections de 15 minutes
+        sections = self._split_into_sections(segments, video_duration, SECTION_DURATION)
+        total_sections = len(sections)
         
-        # Seuil adaptatif: 85% de la capacité du contexte (marge pour le prompt système)
-        # Exemple: 32K ctx → seuil 27K tokens, 16K ctx → seuil 13.6K tokens
-        adaptive_threshold = int(llm_context_size * 0.85)
+        console.print(f"[cyan]📹 Vidéo découpée en {total_sections} sections de ~15min[/cyan]")
         
-        console.print(f"[dim]Contexte LLM: {llm_context_size} tokens, Seuil: {adaptive_threshold} tokens[/dim]")
+        all_moments = []
         
-        # Si la transcription dépasse le seuil adaptatif, utiliser l'ancien système
-        if estimated_tokens > adaptive_threshold:
-            console.print(f"[yellow]⚠️ Transcription longue ({estimated_tokens} tokens > {adaptive_threshold}), mode segment par segment[/yellow]")
-            return self._analyze_segment_by_segment(segments, video_duration, progress_callback)
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
         
-        # ✨ ANALYSE GLOBALE (RAPIDE)
-        console.print(f"[cyan]✨ Analyse globale ({estimated_tokens} tokens, mode rapide activé)[/cyan]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True
+        ) as progress:
+            task = progress.add_task("Analyse par sections...", total=total_sections)
+            
+            for i, section in enumerate(sections):
+                try:
+                    if progress_callback:
+                        pct = i / total_sections
+                        progress_callback(pct, f"Section {i+1}/{total_sections}")
+                    
+                    # Analyser cette section (demande 3-5 moments)
+                    section_moments = self._analyze_section(section, i+1, total_sections)
+                    all_moments.extend(section_moments)
+                    
+                    console.print(f"[dim]Section {i+1}/{total_sections}: {len(section_moments)} moments trouvés[/dim]")
+                    
+                except Exception as e:
+                    console.print(f"[yellow]⚠️ Erreur section {i+1}: {e}[/yellow]")
+                    continue
+                finally:
+                    progress.update(task, advance=1)
         
         if progress_callback:
-            progress_callback(0.1, "Analyse globale en cours...")
+            progress_callback(1.0, f"Analyse terminée: {len(all_moments)} moments trouvés")
         
-        # Créer le prompt global
-        # Limiter selon le contexte disponible (85% du ctx - taille du prompt système)
-        max_transcript_chars = (llm_context_size * 4) - 2000  # Marge pour système + output
-        prompt = self.GLOBAL_PROMPT_TEMPLATE.format(
-            duration=video_duration,
-            transcript=full_transcript[:max_transcript_chars]
-        )
+        console.print(f"[green]✅ {len(all_moments)} moments viraux détectés au total[/green]")
         
-        try:
-            # 🚀 Générer avec paramètres optimisés
-            response = self.llm.generate(
-                prompt,
-                max_tokens=800,      # ⚡ Réduit de 1500 → 800 (moments sans détails verbeux)
-                temperature=0.1,     # ⚡ Réduit de 0.2 → 0.1 (plus déterministe = plus rapide)
-                top_p=0.9,           # Échantillonnage nucleus pour cohérence
-                stop=["<|end|>", "\n\n\n"]
-            )
-            
-            if progress_callback:
-                progress_callback(0.8, "Parsing des résultats...")
-            
-            # Parser la réponse (tableau JSON)
-            moments = self._parse_global_response(response.text, segments)
-            
-            if progress_callback:
-                progress_callback(1.0, f"Analyse terminée: {len(moments)} moments trouvés")
-            
-            console.print(f"[green]✅ {len(moments)} moments viraux détectés[/green]")
-            
-            return moments
-            
-        except Exception as e:
-            console.print(f"[red]❌ Erreur analyse globale: {e}[/red]")
-            console.print("[yellow]↻ Fallback mode segment par segment...[/yellow]")
-            return self._analyze_segment_by_segment(segments, video_duration, progress_callback)
+        # Trier par score et valider
+        all_moments.sort(key=lambda m: m.score, reverse=True)
+        validated = self._validate_moments(all_moments, video_duration)
+        
+        console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(all_moments)}[/cyan]")
+        
+        return validated
     
     def _build_timestamped_transcript(self, segments: List[TranscriptSegment]) -> str:
         """Construit une transcription avec timestamps pour l'analyse globale."""
@@ -245,6 +238,139 @@ Réponds avec CE FORMAT JSON EXACT:
             timestamp = f"[{mins:02d}:{secs:02d}]"
             lines.append(f"{timestamp} {seg.text}")
         return "\n".join(lines)
+    
+    def _split_into_sections(
+        self, 
+        segments: List[TranscriptSegment], 
+        video_duration: float,
+        section_duration: float = 900
+    ) -> List[List[TranscriptSegment]]:
+        """
+        Découpe les segments en sections temporelles de ~15 minutes.
+        
+        Args:
+            segments: Tous les segments de transcription
+            video_duration: Durée totale de la vidéo
+            section_duration: Durée cible d'une section (900s = 15min)
+        
+        Returns:
+            Liste de sections, chaque section = liste de segments
+        """
+        sections = []
+        current_section = []
+        section_start = 0.0
+        
+        for seg in segments:
+            # Si le segment dépasse la limite de temps, créer une nouvelle section
+            if seg.start >= section_start + section_duration and current_section:
+                sections.append(current_section)
+                current_section = []
+                section_start = seg.start
+            
+            current_section.append(seg)
+        
+        # Ajouter la dernière section
+        if current_section:
+            sections.append(current_section)
+        
+        return sections
+    
+    def _analyze_section(
+        self,
+        section_segments: List[TranscriptSegment],
+        section_num: int,
+        total_sections: int
+    ) -> List[ViralMomentAI]:
+        """
+        Analyse une section de ~15 minutes et retourne 3-5 meilleurs moments.
+        Réessaie jusqu'à 3 fois si le JSON est invalide.
+        
+        Args:
+            section_segments: Segments de cette section
+            section_num: Numéro de la section (pour affichage)
+            total_sections: Nombre total de sections
+        
+        Returns:
+            Liste de 3-5 moments viraux de cette section
+        """
+        if not section_segments:
+            return []
+        
+        # Construire la transcription de cette section
+        section_transcript = self._build_timestamped_transcript(section_segments)
+        section_start = section_segments[0].start
+        section_end = section_segments[-1].end
+        section_duration = section_end - section_start
+        
+        # Créer le prompt pour cette section
+        prompt = f"""<|system|>
+Tu es un expert en contenu viral pour TikTok/Reels/Shorts. Tu identifies les meilleurs moments d'une section de vidéo.
+Réponds UNIQUEMENT avec un tableau JSON, rien d'autre.<|end|>
+<|user|>
+Voici la transcription de la SECTION {section_num}/{total_sections} (durée: {section_duration:.0f}s):
+
+{section_transcript}
+
+MISSION:
+Identifie les 3 à 5 MEILLEURS moments viraux de cette section (30-90s chacun).
+
+CRITÈRES:
+- Accroche forte au début du moment
+- Émotion claire (humour, surprise, tension, inspiration)
+- Message complet et autonome
+- Potentiel de partage élevé
+
+INSTRUCTIONS:
+1. Analyse TOUTE cette section
+2. Repère les 3-5 moments les plus intéressants
+3. Pour chaque moment, donne le timestamp de début et fin
+4. Score entre 0.0 et 1.0 (sois généreux, inclure > 0.5)
+
+FORMAT JSON EXACT (tableau de 3-5 moments):
+[
+  {{"start": 15, "end": 65, "score": 0.85, "hook": "phrase accrocheuse", "emotion": "humour", "reason": "explication courte"}},
+  {{"start": 120, "end": 180, "score": 0.78, "hook": "autre phrase", "emotion": "surprise", "reason": "pourquoi viral"}}
+]
+
+Retourne UNIQUEMENT le tableau JSON (3-5 moments), rien d'autre.<|end|>
+<|assistant|>
+"""
+        
+        # Système de retry (max 3 tentatives)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Générer avec le LLM
+                response = self.llm.generate(
+                    prompt,
+                    max_tokens=800,  # 3-5 moments = ~500-700 tokens
+                    temperature=0.2,  # Un peu de créativité pour varier les sélections
+                    top_p=0.9,
+                    stop=["<|end|>", "\n\n\n"]
+                )
+                
+                # Parser la réponse
+                moments = self._parse_global_response(response.text, section_segments)
+                
+                # Si on a réussi à parser au moins 1 moment, c'est bon
+                if moments:
+                    return moments
+                
+                # Si aucun moment mais pas d'exception, retry
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    return []
+                
+            except Exception as e:
+                # En cas d'erreur JSON, retry silencieusement
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    # Dernière tentative échouée, retourner liste vide (pas de message d'erreur)
+                    return []
+        
+        return []
     
     def _parse_global_response(self, response_text: str, segments: List[TranscriptSegment]) -> List[ViralMomentAI]:
         """Parse la réponse globale du LLM (tableau JSON de moments)."""
@@ -274,7 +400,7 @@ Réponds avec CE FORMAT JSON EXACT:
                             
                             duration = moment.end_time - moment.start_time
                             if (self.min_clip_duration <= duration <= self.max_clip_duration 
-                                and moment.score >= 0.5):
+                                and moment.score >= 0.5):  # Seuil pour filtrer les moments de qualité
                                 moments.append(moment)
                         except (ValueError, KeyError) as e:
                             console.print(f"[dim]⚠️ Moment invalide ignoré: {e}[/dim]")
@@ -287,7 +413,8 @@ Réponds avec CE FORMAT JSON EXACT:
             console.print(f"[dim]Réponse LLM: {response_text[:200]}...[/dim]")
         
         moments.sort(key=lambda m: m.score, reverse=True)
-        return moments[:self.max_clips]
+        # Retourner tous les moments trouvés (le tri final se fait dans analyze())
+        return moments
     
     def _analyze_segment_by_segment(
         self,
@@ -516,7 +643,7 @@ Réponds avec CE FORMAT JSON EXACT:
         moments.sort(key=lambda x: x.score, reverse=True)
 
         valid = []
-        min_score = 0.35  # Seuil abaissé pour être plus permissif
+        min_score = 0.5  # Seuil pour garantir la qualité (avec sections, on a déjà beaucoup de clips)
         used_ranges = []  # Pour éviter les chevauchements
 
         for moment in moments:

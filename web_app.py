@@ -52,6 +52,64 @@ log_buffers = {}
 jobs = {}
 
 
+def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "output", keep_user_files: bool = False):
+    """
+    Nettoie TOUS les fichiers résiduels générés par ClipGenius.
+    
+    Args:
+        video_path: Chemin de la vidéo source à supprimer (si non-utilisateur)
+        output_dir: Dossier de sortie à nettoyer
+        keep_user_files: Si True, ne supprime pas la vidéo source
+    
+    Nettoie:
+    - Vidéo source téléchargée (si non-utilisateur)
+    - Fichiers temporaires MoviePy (*TEMP_MPY_*.mp4)
+    - Fichiers audio nettoyés (.sanitized_*.mp4)
+    - Fichiers de sous-titres (*.ass, *_sub.json)
+    - Dossiers temporaires pycaps (pycaps_viral_*)
+    """
+    import tempfile
+    import shutil
+    
+    # 1. Vidéo source (sauf si fichier utilisateur)
+    if not keep_user_files and video_path and os.path.exists(video_path):
+        try:
+            os.remove(video_path)
+        except:
+            pass
+    
+    # 2. Fichiers temporaires (patterns)
+    temp_patterns = [
+        '*TEMP_MPY_*.mp4',      # Fichiers temporaires MoviePy
+        '*_sub.json',            # Fichiers de sous-titres JSON
+        '*.ass',                 # Fichiers ASS temporaires
+        '.sanitized_*.mp4',      # Vidéos avec audio nettoyé
+    ]
+    
+    for pattern in temp_patterns:
+        # Répertoire courant
+        for f in Path('.').glob(pattern):
+            try:
+                f.unlink()
+            except:
+                pass
+        
+        # Dossier output
+        for f in Path(output_dir).glob(pattern):
+            try:
+                f.unlink()
+            except:
+                pass
+    
+    # 3. Dossiers temporaires pycaps
+    temp_base = Path(tempfile.gettempdir())
+    for pycaps_dir in temp_base.glob('pycaps_viral_*'):
+        try:
+            shutil.rmtree(pycaps_dir, ignore_errors=True)
+        except:
+            pass
+
+
 class LogCapture:
     """Capture les logs et les envoie à la queue SSE + buffer pour reconnexion"""
 
@@ -83,6 +141,18 @@ class LogCapture:
 def process_video(job_id: str, url: str, options: dict):
     """Traite une vidéo YouTube ou locale en arrière-plan"""
     
+    # === DEBUG LOG FICHIER ===
+    import datetime
+    debug_log = Path(__file__).parent / "process_video_debug.log"
+    def debug(msg):
+        with open(debug_log, "a") as f:
+            f.write(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+    
+    debug(f"{'='*60}")
+    debug(f"NOUVELLE GÉNÉRATION - Job ID: {job_id}")
+    debug(f"URL: {url}")
+    debug(f"Options: {options}")
+    
     # === LAZY IMPORTS (chargés ici pour démarrage rapide de Flask) ===
     from src.downloader import VideoDownloader
     from src.viral_detector import ViralMoment, ViralMomentDetector
@@ -90,6 +160,8 @@ def process_video(job_id: str, url: str, options: dict):
     from src.subtitles import SubtitleGenerator
     from src.ai_analyzer import TranscriptSegment, analyze_with_ai
     from src.auto_config import AutoConfigurator, GeneratedConfig
+    
+    debug("Imports OK")
     
     logger = LogCapture(job_id)
     jobs[job_id] = {"status": "running", "clips": [], "error": None}
@@ -100,9 +172,13 @@ def process_video(job_id: str, url: str, options: dict):
     transcription_result = None  # Sera récupéré du job d'analyse si disponible
     
     try:
+        debug("Début du try block")
+        
         # Vérifier si c'est un fichier local ou une URL YouTube
         local_file = options.get('local_file')
         skip_download = options.get('skip_download', False)
+        
+        debug(f"local_file: {local_file}, skip_download: {skip_download}")
         
         # Si on réutilise une analyse, commencer directement à l'étape "generate"
         if skip_download and local_file:
@@ -110,6 +186,7 @@ def process_video(job_id: str, url: str, options: dict):
             is_uploaded = True
             
             if not Path(video_path).exists():
+                debug(f"ERREUR: Fichier introuvable: {video_path}")
                 raise Exception("Fichier introuvable")
             
             # Démarrer directement à "generate" avec 5% pour initialiser la barre bleue
@@ -486,13 +563,13 @@ def process_video(job_id: str, url: str, options: dict):
         logger.log("Traitement terminé avec succès!", "success", "complete", 100)
         
         # === COPIE AUTOMATIQUE VERS DOSSIER TÉLÉCHARGEMENTS ===
+        # Détecter le dossier Téléchargements de l'utilisateur (défini ici pour être accessible plus loin)
+        from pathlib import Path as PathLib
+        home = PathLib.home()
+        downloads_dir = home / "Downloads"
+        
         try:
             import shutil
-            from pathlib import Path as PathLib
-            
-            # Détecter le dossier Téléchargements de l'utilisateur
-            home = PathLib.home()
-            downloads_dir = home / "Downloads"
             
             logger.log(f"Déplacement des clips vers {downloads_dir}...", "info", "complete", 100)
             
@@ -518,35 +595,68 @@ def process_video(job_id: str, url: str, options: dict):
             clips_to_delete = []  # Ne pas supprimer si la copie a échoué
         
         # Convertir les chemins en URLs relatives + extraire métadonnées
+        # LOG FICHIER POUR DEBUG
+        import datetime
+        debug_log = Path(__file__).parent / "metadata_extraction_debug.log"
+        with open(debug_log, "a") as f:
+            f.write(f"\n{'='*60}\n[{datetime.datetime.now()}] EXTRACTION MÉTADONNÉES\n")
+            f.write(f"Nombre de clips à traiter: {len(clips)}\n")
+            f.write(f"Downloads dir: {downloads_dir}\n")
+        
         clip_data = []
         for i, clip_path in enumerate(clips):
             try:
                 clip_file = Path(clip_path)
                 
-                # Vérifier que le fichier existe avant d'extraire les métadonnées
-                if not clip_file.exists():
-                    logger.log(f"⚠️ Clip introuvable: {clip_path}", "warning", "complete", 100)
-                    # Utiliser le chemin absolu si relatif
-                    clip_file = Path(__file__).parent / clip_path
-                    if not clip_file.exists():
-                        logger.log(f"⚠️ Clip introuvable (absolu): {clip_file}", "warning", "complete", 100)
+                with open(debug_log, "a") as f:
+                    f.write(f"\n--- Clip {i+1}/{len(clips)} ---\n")
+                    f.write(f"Chemin original: {clip_path}\n")
+                    f.write(f"Nom fichier: {clip_file.name}\n")
+                
+                # Les clips ont été copiés vers Downloads, chercher là-bas
+                downloads_clip = downloads_dir / clip_file.name
+                
+                with open(debug_log, "a") as f:
+                    f.write(f"Chemin Downloads: {downloads_clip}\n")
+                    f.write(f"Existe? {downloads_clip.exists()}\n")
+                
+                # Vérifier que le fichier existe dans Downloads
+                if not downloads_clip.exists():
+                    logger.log(f"⚠️ Clip introuvable dans Downloads: {downloads_clip}", "warning", "complete", 100)
+                    with open(debug_log, "a") as f:
+                        f.write(f"ERREUR: Clip introuvable!\n")
+                    # Fallback: essayer dans output/ (si copie a échoué)
+                    if clip_file.exists():
+                        downloads_clip = clip_file
+                        logger.log(f"  → Utilisation depuis output/: {clip_file}", "info", "complete", 100)
+                        with open(debug_log, "a") as f:
+                            f.write(f"Fallback vers output/: {clip_file}\n")
+                    else:
+                        logger.log(f"⚠️ Clip introuvable partout, skip", "warning", "complete", 100)
+                        with open(debug_log, "a") as f:
+                            f.write(f"SKIP - introuvable partout\n")
                         continue
                 
-                # Extraire les métadonnées du fichier
+                # Extraire les métadonnées du fichier dans Downloads
+                # Utiliser /clips/ au lieu de /output/ car on sert depuis ~/Downloads
                 metadata = {
-                    "url": f"/output/{clip_file.name}",
-                    "name": clip_file.name,
+                    "url": f"/clips/{downloads_clip.name}",
+                    "name": downloads_clip.name,
                     "index": i,
-                    "size": round(clip_file.stat().st_size / (1024 * 1024), 1),  # MB
+                    "size": round(downloads_clip.stat().st_size / (1024 * 1024), 1),  # MB
                 }
+                
+                with open(debug_log, "a") as f:
+                    f.write(f"URL générée: {metadata['url']}\n")
+                    f.write(f"Taille: {metadata['size']} MB\n")
                 
                 # Extraire durée et score à partir du nom de fichier ou via ffprobe
                 try:
                     from moviepy import VideoFileClip
-                    with VideoFileClip(str(clip_file)) as vc:
+                    with VideoFileClip(str(downloads_clip)) as vc:
                         metadata["duration"] = round(vc.duration, 1)
                 except Exception as e:
-                    logger.log(f"⚠️ Impossible d'extraire la durée de {clip_file.name}: {e}", "warning", "complete", 100)
+                    logger.log(f"⚠️ Impossible d'extraire la durée de {downloads_clip.name}: {e}", "warning", "complete", 100)
                     metadata["duration"] = 60.0  # Valeur par défaut
                 
                 # Score estimé - les premiers clips ont les meilleurs scores
@@ -557,13 +667,13 @@ def process_video(job_id: str, url: str, options: dict):
                 metadata["score"] = round(0.95 - (i * score_decrement), 2)
                 
                 clip_data.append(metadata)
-                logger.log(f"✓ Métadonnées extraites pour {clip_file.name}", "info", "complete", 100)
+                logger.log(f"✓ Métadonnées extraites pour {downloads_clip.name}", "info", "complete", 100)
                 
             except Exception as e:
                 logger.log(f"❌ Erreur extraction métadonnées pour {clip_path}: {e}", "error", "complete", 100)
                 # Ajouter quand même un objet minimal
                 clip_data.append({
-                    "url": f"/output/{Path(clip_path).name}",
+                    "url": f"/clips/{Path(clip_path).name}",
                     "name": Path(clip_path).name,
                     "index": i,
                     "size": 5.0,
@@ -572,57 +682,88 @@ def process_video(job_id: str, url: str, options: dict):
                 })
         
         logger.log(f"📊 {len(clip_data)} clips prêts avec métadonnées", "success", "complete", 100)
+        
+        # Log des URLs générées pour debug
+        for i, clip in enumerate(clip_data):
+            logger.log(f"  Clip {i+1}: {clip['url']} ({clip['size']} MB)", "info", "complete", 100)
+        
         jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None}
         
-        # === SUPPRESSION DES CLIPS DU DOSSIER OUTPUT ===
-        # Les clips sont maintenant dans ~/Téléchargements, on peut nettoyer output/
+        # === NETTOYAGE IMMÉDIAT D'OUTPUT/ ===
+        # Les clips sont maintenant servis depuis ~/Downloads via /clips/
+        # On peut donc nettoyer output/ immédiatement
         if clips_to_delete:
-            logger.log("Nettoyage du dossier output/...", "info", "complete", 100)
+            logger.log(f"🗑️ Nettoyage immédiat de {len(clips_to_delete)} clips d'output/ (servis depuis Downloads)", "info", "complete", 100)
             deleted_count = 0
             for clip_file in clips_to_delete:
                 try:
                     if clip_file.exists():
                         clip_file.unlink()
                         deleted_count += 1
-                except Exception as e:
-                    logger.log(f"⚠️ Impossible de supprimer {clip_file.name}: {e}", "warning", "complete", 100)
-            
+                except:
+                    pass
             if deleted_count > 0:
-                logger.log(f"🗑️ {deleted_count} clips supprimés d'output/ (disponibles dans Téléchargements)", "success", "complete", 100)
+                logger.log(f"✓ {deleted_count} clips supprimés d'output/", "info", "complete", 100)
         
-        # Nettoyage des fichiers sources (sauf fichiers utilisateur)
-        is_user_file = options.get('is_user_file', False)
-        if (is_downloaded or is_uploaded) and not is_user_file and video_path and os.path.exists(video_path):
-            try:
-                os.remove(video_path)
-                logger.log("Fichier source nettoyé", "info", "complete", 100)
-            except:
-                pass
-        
-        # Nettoyer les fichiers temp
-        for pattern in ['*TEMP_MPY_*.mp4', '*_sub.json']:
+        # Nettoyer aussi les autres fichiers temporaires
+        import tempfile
+        temp_patterns = ['*TEMP_MPY_*.mp4', '*_sub.json', '*.ass', '.sanitized_*.mp4']
+        for pattern in temp_patterns:
             for f in Path('.').glob(pattern):
                 try:
                     f.unlink()
                 except:
                     pass
-            for f in Path(output_dir).glob(pattern.replace('*TEMP', '*')):
+            for f in Path(output_dir).glob(pattern):
                 try:
                     f.unlink()
                 except:
                     pass
         
+        # Nettoyer pycaps
+        temp_base = Path(tempfile.gettempdir())
+        for pycaps_dir in temp_base.glob('pycaps_viral_*'):
+            try:
+                import shutil
+                shutil.rmtree(pycaps_dir, ignore_errors=True)
+            except:
+                pass
+        
+        # === DÉSACTIVÉ: Ne plus supprimer la vidéo source après succès ===
+        # La vidéo pourrait être réutilisée pour d'autres clips
+        # is_user_file = options.get('is_user_file', False)
+        # if (is_downloaded or is_uploaded) and not is_user_file and video_path and os.path.exists(video_path):
+        #     try:
+        #         os.remove(video_path)
+        #         logger.log("Vidéo source nettoyée", "info", "complete", 100)
+        #     except:
+        #         pass
+        logger.log("Vidéo source préservée", "info", "complete", 100)
+        
     except Exception as e:
         import traceback
         error_msg = str(e)
+        debug(f"EXCEPTION: {error_msg}")
+        debug(f"TRACEBACK:\n{traceback.format_exc()}")
         logger.log(f"ERREUR: {error_msg}", "error", "error", 0)
         logger.log(traceback.format_exc(), "error", "error", 0)
         jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg}
     
     finally:
+        debug("Bloc finally atteint")
+        # === DÉSACTIVÉ: Ne plus supprimer la vidéo dans finally ===
+        # La vidéo doit rester pour permettre de regénérer des clips
+        # is_user_file = options.get('is_user_file', False)
+        # if not is_user_file and video_path and os.path.exists(video_path):
+        #     try:
+        #         os.remove(video_path)
+        #     except:
+        #         pass
+        
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
         time.sleep(2)
         logger.close()
+        debug("FIN process_video()")
 
 
 @app.route('/')
@@ -634,15 +775,30 @@ def index():
 @app.route('/api/process', methods=['POST'])
 def start_process():
     """Démarre le traitement d'une vidéo"""
+    # === DEBUG LOG ===
+    import datetime
+    debug_log = Path(__file__).parent / "api_process_debug.log"
+    with open(debug_log, "a") as f:
+        f.write(f"\n[{datetime.datetime.now()}] /api/process appelé\n")
+    
     data = request.json
     url = data.get('url', '').strip()
     video_path = data.get('video_path', '').strip()
     
+    with open(debug_log, "a") as f:
+        f.write(f"URL: {url}\n")
+        f.write(f"video_path: {video_path}\n")
+        f.write(f"data keys: {list(data.keys())}\n")
+    
     # Accepter soit une URL YouTube, soit un video_path pré-téléchargé
     if not url and not video_path:
+        with open(debug_log, "a") as f:
+            f.write("ERREUR: URL ou video_path requis\n")
         return jsonify({"error": "URL ou video_path requis"}), 400
     
     if url and 'youtube.com' not in url and 'youtu.be' not in url:
+        with open(debug_log, "a") as f:
+            f.write(f"ERREUR: URL YouTube invalide: {url}\n")
         return jsonify({"error": "URL YouTube invalide"}), 400
     
     # Générer un ID unique
@@ -785,6 +941,14 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
         jobs[job_id] = {"status": "completed", "data": result_data, "error": None}
         logger.log("Analyse terminée!", "success", "complete", 100)
         
+        # === NETTOYAGE - DÉSACTIVÉ pour la vidéo source ===
+        # La vidéo doit rester disponible pour la génération de clips!
+        cleanup_residual_files(
+            video_path=None,  # NE PAS supprimer la vidéo téléchargée
+            output_dir="output",
+            keep_user_files=is_local
+        )
+        
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -794,6 +958,16 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
         jobs[job_id] = {"status": "failed", "data": None, "error": error_msg}
     
     finally:
+        # === NETTOYAGE FINAL (même en cas d'erreur) ===
+        # ⚠️ NE PAS supprimer la vidéo ici car elle sera réutilisée pour la génération!
+        # La vidéo sera supprimée après la génération dans process_video()
+        # On nettoie seulement les fichiers temporaires, pas la vidéo source
+        cleanup_residual_files(
+            video_path=None,  # Ne pas supprimer la vidéo téléchargée
+            output_dir="output",
+            keep_user_files=is_local
+        )
+        
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
         time.sleep(2)
         logger.close()
@@ -802,14 +976,32 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
 @app.route('/api/process-local', methods=['POST'])
 def start_process_local():
     """Démarre le traitement d'un fichier vidéo local (chemin direct)"""
+    import datetime
+    debug_log = Path(__file__).parent / "process_local_debug.log"
+    
     data = request.json
     file_path = data.get('file_path', '').strip()
+    
+    # === DEBUG LOG ===
+    with open(debug_log, "a") as f:
+        f.write(f"\n[{datetime.datetime.now()}] /api/process-local appelé\n")
+        f.write(f"  file_path reçu: '{file_path}'\n")
+        f.write(f"  file_path existe: {Path(file_path).exists() if file_path else 'N/A'}\n")
+        # Lister les fichiers dans downloads/
+        downloads_path = Path(__file__).parent / "downloads"
+        if downloads_path.exists():
+            files = list(downloads_path.glob('*'))
+            f.write(f"  Fichiers dans downloads/: {[str(f.name) for f in files]}\n")
+        else:
+            f.write(f"  downloads/ n'existe pas\n")
     
     if not file_path:
         return jsonify({"error": "Chemin du fichier requis"}), 400
     
     # Vérifier que le fichier existe
     if not Path(file_path).exists():
+        with open(debug_log, "a") as f:
+            f.write(f"  ERREUR: Fichier introuvable!\n")
         return jsonify({"error": "Fichier introuvable"}), 400
     
     # Vérifier l'extension
@@ -1239,6 +1431,13 @@ def serve_output(filename: str):
     """Sert les fichiers de sortie avec le bon type MIME pour les vidéos"""
     # Chemin absolu vers le dossier output
     output_dir = Path(__file__).parent / 'output'
+    file_path = output_dir / filename
+    
+    # Log pour tracer les requêtes
+    if file_path.exists():
+        print(f"✅ [serve_output] Fichier trouvé: {filename} ({file_path.stat().st_size} bytes)")
+    else:
+        print(f"❌ [serve_output] Fichier INTROUVABLE: {filename} (chemin: {file_path})")
     
     # Déterminer le type MIME
     mimetype = None
@@ -1256,15 +1455,90 @@ def serve_output(filename: str):
     return response
 
 
+@app.route('/clips/<path:filename>')
+def serve_clips(filename: str):
+    """Sert les clips finaux depuis ~/Downloads (~/Téléchargements sur Mac FR)"""
+    # LOG FICHIER POUR DEBUG
+    import datetime
+    debug_log = Path(__file__).parent / "serve_clips_debug.log"
+    with open(debug_log, "a") as f:
+        f.write(f"\n[{datetime.datetime.now()}] REQUEST: /clips/{filename}\n")
+    
+    # Déterminer le dossier Downloads selon l'OS et la langue
+    downloads_dir = Path.home() / 'Downloads'
+    
+    # Sur Mac avec locale française, le dossier peut être "Téléchargements"
+    if not downloads_dir.exists():
+        downloads_dir = Path.home() / 'Téléchargements'
+    
+    # Si toujours pas trouvé, essayer les alternatives
+    if not downloads_dir.exists():
+        downloads_dir = Path.home() / 'Téléchargements'  # Accent français
+    
+    file_path = downloads_dir / filename
+    
+    # Log pour tracer les requêtes
+    with open(debug_log, "a") as f:
+        if file_path.exists():
+            msg = f"✅ Fichier trouvé: {filename} ({file_path.stat().st_size} bytes)\n"
+            print(msg.strip())
+            f.write(msg)
+        else:
+            msg = f"❌ Fichier INTROUVABLE: {filename}\n   Chemin: {file_path}\n   Downloads existe: {downloads_dir.exists()}\n"
+            print(msg.strip())
+            f.write(msg)
+            if downloads_dir.exists():
+                # Lister les fichiers disponibles pour debug
+                available = list(downloads_dir.glob('*.mp4'))[:5]
+                avail_msg = f"   Fichiers .mp4 disponibles: {[f.name for f in available]}\n"
+                print(avail_msg.strip())
+                f.write(avail_msg)
+    
+    # Déterminer le type MIME
+    mimetype = None
+    if filename.lower().endswith('.mp4'):
+        mimetype = 'video/mp4'
+    elif filename.lower().endswith('.webm'):
+        mimetype = 'video/webm'
+    elif filename.lower().endswith('.mov'):
+        mimetype = 'video/quicktime'
+    
+    # Envoyer le fichier avec support des range requests (nécessaire pour les vidéos)
+    response = send_from_directory(downloads_dir, filename, mimetype=mimetype)
+    response.headers['Accept-Ranges'] = 'bytes'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
 # Créer le dossier templates
 templates_dir = Path(__file__).parent / 'web' / 'templates'
 templates_dir.mkdir(parents=True, exist_ok=True)
 
 if __name__ == '__main__':
     # Créer le dossier output
-    Path('output').mkdir(exist_ok=True)
+    output_path = Path('output')
+    output_path.mkdir(exist_ok=True)
     
-    print("\n" + "="*50)
+    # === NETTOYAGE AU DÉMARRAGE ===
+    # Supprimer tous les clips résiduels de la session précédente
+    print("\n🧹 Nettoyage des fichiers résiduels...")
+    cleanup_residual_files(video_path=None, output_dir="output", keep_user_files=False)
+    
+    # === DÉSACTIVÉ: Ne plus supprimer downloads/ au démarrage ===
+    # La vidéo doit rester disponible entre l'analyse et la génération
+    # downloads_path = Path('downloads')
+    # if downloads_path.exists():
+    #     for video_file in downloads_path.glob('*.mp4'):
+    #         try:
+    #             video_file.unlink()
+    #             print(f"  🗑️ Supprimé: {video_file.name}")
+    #         except:
+    #             pass
+    print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
+    
+    print("✅ Nettoyage terminé\n")
+    
+    print("="*50)
     print("  ClipGenius - Interface Web")
     print("  http://localhost:5001")
     print("="*50 + "\n")

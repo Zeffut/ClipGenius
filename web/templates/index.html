@@ -1571,22 +1571,6 @@
             margin-bottom: 12px;
             line-height: 1.4;
         }
-        
-        .preset-specs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: center;
-        }
-        
-        .preset-spec {
-            font-size: 11px;
-            padding: 4px 8px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-muted);
-        }
 
         /* YouTube Preview Card */
         .youtube-preview-card {
@@ -2143,11 +2127,6 @@
                                 <div class="preset-icon">🎙️</div>
                                 <div class="preset-name">Podcast</div>
                                 <div class="preset-desc">Interviews, discussions et talk-shows</div>
-                                <div class="preset-specs">
-                                    <span class="preset-spec">30-90s</span>
-                                    <span class="preset-spec">Audio HQ</span>
-                                    <span class="preset-spec">Sous-titres clairs</span>
-                                </div>
                             </div>
 
                             <!-- Gaming Preset -->
@@ -2155,11 +2134,6 @@
                                 <div class="preset-icon">🎮</div>
                                 <div class="preset-name">Gaming</div>
                                 <div class="preset-desc">Clips de jeux et meilleurs moments</div>
-                                <div class="preset-specs">
-                                    <span class="preset-spec">15-60s</span>
-                                    <span class="preset-spec">Dynamique</span>
-                                    <span class="preset-spec">Sous-titres neon</span>
-                                </div>
                             </div>
 
                             <!-- Vlog Preset -->
@@ -2167,11 +2141,6 @@
                                 <div class="preset-icon">📹</div>
                                 <div class="preset-name">Vlog</div>
                                 <div class="preset-desc">Lifestyle, voyages et quotidien</div>
-                                <div class="preset-specs">
-                                    <span class="preset-spec">15-60s</span>
-                                    <span class="preset-spec">Look chaleureux</span>
-                                    <span class="preset-spec">Emojis</span>
-                                </div>
                             </div>
 
                             <!-- Tutorial Preset -->
@@ -2179,11 +2148,6 @@
                                 <div class="preset-icon">🎓</div>
                                 <div class="preset-name">Tutoriel</div>
                                 <div class="preset-desc">Guides, formations et how-to</div>
-                                <div class="preset-specs">
-                                    <span class="preset-spec">45-120s</span>
-                                    <span class="preset-spec">Sous-titres clairs</span>
-                                    <span class="preset-spec">Professionnel</span>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -5183,6 +5147,21 @@
         window.addEventListener('offline', () => {
             logConnection('Navigateur OFFLINE', 'warn');
             updateConnectionIndicator('disconnected');
+        });
+        
+        // === DÉTECTION ONGLET INACTIF → ACTIF ===
+        // Force un refresh de l'UI quand l'utilisateur revient sur l'onglet
+        // (les animations CSS sont souvent mises en pause sur onglet inactif)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && currentStep) {
+                // L'onglet redevient visible et on a un processus en cours
+                console.log(`👁️ Onglet redevenu visible, refresh UI pour step: ${currentStep}`);
+                
+                // Force un re-render des progress pills en retirant le check "skip if same"
+                const previousStep = currentStep;
+                currentStep = null;  // Reset temporairement
+                setStep(previousStep);  // Force le re-render
+            }
         });
     </script>
 </body>
