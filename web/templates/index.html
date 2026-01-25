@@ -1772,6 +1772,21 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Mini spinner inline pour substatus */
+        .mini-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+            position: relative;
+            top: -1px;
+        }
         
         @keyframes slideInRight {
             from {
@@ -2379,6 +2394,28 @@
         // === CIRCULAR PROGRESS CONSTANTS ===
         const CIRCLE_CIRCUMFERENCE = 565.48; // 2 * PI * 90
 
+        // === HELPER: UPDATE SUBSTATUS WITH SPINNER ===
+        /**
+         * Met à jour le substatus avec un spinner pour les opérations longues
+         * @param {HTMLElement} element - L'élément substatus à mettre à jour
+         * @param {string} message - Le message à afficher
+         */
+        function setSubstatusWithSpinner(element, message) {
+            if (!element || !message) return;
+            
+            // Messages qui nécessitent un spinner (opérations longues sans progression %)
+            const needsSpinner = message.includes('Analyse globale en cours') || 
+                                message.includes('Transcription en cours') ||
+                                message.includes('Analyse IA en cours') ||
+                                message.includes('Parsing des résultats');
+            
+            if (needsSpinner) {
+                element.innerHTML = `${message} <span class="mini-spinner"></span>`;
+            } else {
+                element.textContent = message;
+            }
+        }
+
         let currentStep = null;
         let currentView = 'source';
         let startTime = null;
@@ -2785,21 +2822,21 @@
                         progressIcon.textContent = '📥';
                         progressStatus.textContent = 'Téléchargement';
                         if (message) {
-                            progressSubstatus.textContent = message;
+                            setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'transcribe') {
                         activateAnalysisStep('transcribe');
                         progressIcon.textContent = '🎤';
                         progressStatus.textContent = 'Transcription Whisper';
                         if (message) {
-                            progressSubstatus.textContent = message;
+                            setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'detect') {
                         activateAnalysisStep('detect');
                         progressIcon.textContent = '🎯';
                         progressStatus.textContent = 'Détection du type de contenu';
                         if (message) {
-                            progressSubstatus.textContent = message;
+                            setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'complete') {
                         eventSource.close();
@@ -4522,11 +4559,20 @@
             
             console.log(`📍 visualStep: "${visualStep}", index: ${stepIndex}`);
             
-            // Update step indicators
+            // Update step indicators - ONLY in the active view
+            // Determine active view container
+            const activeView = document.querySelector('.step-view.active');
+            if (!activeView) {
+                console.warn(`⚠️ Aucune vue active trouvée (.step-view.active)`);
+                return;
+            }
+            console.log(`📍 Vue active: ${activeView.id}`);
+            
             visualStepOrder.forEach((step, i) => {
-                const el = document.querySelector(`.progress-step[data-step="${step}"]`);
+                // Query ONLY within the active view to avoid duplicate elements
+                const el = activeView.querySelector(`.progress-step[data-step="${step}"]`);
                 if (!el) {
-                    console.warn(`⚠️ Élément introuvable pour data-step="${step}"`);
+                    console.warn(`⚠️ Élément introuvable pour data-step="${step}" dans ${activeView.id}`);
                     return;
                 }
 
@@ -4565,10 +4611,7 @@
         
         // Update substatus dynamiquement avec les messages du serveur
         function updateSubstatus(message, progress, step) {
-            if (progressSubstatus && message) {
-                // Le message contient déjà le pourcentage si disponible (ex: "Transcription 23%")
-                progressSubstatus.textContent = message;
-            }
+            setSubstatusWithSpinner(progressSubstatus, message);
         }
 
         // === PROGRESSION FLUIDE ===

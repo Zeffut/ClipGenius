@@ -514,33 +514,58 @@ def process_video(job_id: str, url: str, options: dict):
         # Convertir les chemins en URLs relatives + extraire métadonnées
         clip_data = []
         for i, clip_path in enumerate(clips):
-            clip_file = Path(clip_path)
-            
-            # Extraire les métadonnées du fichier
-            metadata = {
-                "url": f"/output/{clip_file.name}",
-                "name": clip_file.name,
-                "index": i,
-                "size": round(clip_file.stat().st_size / (1024 * 1024), 1),  # MB
-            }
-            
-            # Extraire durée et score à partir du nom de fichier ou via ffprobe
             try:
-                from moviepy import VideoFileClip
-                with VideoFileClip(str(clip_path)) as vc:
-                    metadata["duration"] = round(vc.duration, 1)
-            except:
-                metadata["duration"] = 60.0  # Valeur par défaut
-            
-            # Score estimé - les premiers clips ont les meilleurs scores
-            # (décroît progressivement de 0.95 à 0.80)
-            # TODO: extraire le vrai score depuis les moments viraux
-            score_range = 0.15  # 0.95 - 0.80 = 0.15
-            score_decrement = score_range / max(len(clips), 1)
-            metadata["score"] = round(0.95 - (i * score_decrement), 2)
-            
-            clip_data.append(metadata)
+                clip_file = Path(clip_path)
+                
+                # Vérifier que le fichier existe avant d'extraire les métadonnées
+                if not clip_file.exists():
+                    logger.log(f"⚠️ Clip introuvable: {clip_path}", "warning", "complete", 100)
+                    # Utiliser le chemin absolu si relatif
+                    clip_file = Path(__file__).parent / clip_path
+                    if not clip_file.exists():
+                        logger.log(f"⚠️ Clip introuvable (absolu): {clip_file}", "warning", "complete", 100)
+                        continue
+                
+                # Extraire les métadonnées du fichier
+                metadata = {
+                    "url": f"/output/{clip_file.name}",
+                    "name": clip_file.name,
+                    "index": i,
+                    "size": round(clip_file.stat().st_size / (1024 * 1024), 1),  # MB
+                }
+                
+                # Extraire durée et score à partir du nom de fichier ou via ffprobe
+                try:
+                    from moviepy import VideoFileClip
+                    with VideoFileClip(str(clip_file)) as vc:
+                        metadata["duration"] = round(vc.duration, 1)
+                except Exception as e:
+                    logger.log(f"⚠️ Impossible d'extraire la durée de {clip_file.name}: {e}", "warning", "complete", 100)
+                    metadata["duration"] = 60.0  # Valeur par défaut
+                
+                # Score estimé - les premiers clips ont les meilleurs scores
+                # (décroît progressivement de 0.95 à 0.80)
+                # TODO: extraire le vrai score depuis les moments viraux
+                score_range = 0.15  # 0.95 - 0.80 = 0.15
+                score_decrement = score_range / max(len(clips), 1)
+                metadata["score"] = round(0.95 - (i * score_decrement), 2)
+                
+                clip_data.append(metadata)
+                logger.log(f"✓ Métadonnées extraites pour {clip_file.name}", "info", "complete", 100)
+                
+            except Exception as e:
+                logger.log(f"❌ Erreur extraction métadonnées pour {clip_path}: {e}", "error", "complete", 100)
+                # Ajouter quand même un objet minimal
+                clip_data.append({
+                    "url": f"/output/{Path(clip_path).name}",
+                    "name": Path(clip_path).name,
+                    "index": i,
+                    "size": 5.0,
+                    "duration": 60.0,
+                    "score": 0.85
+                })
         
+        logger.log(f"📊 {len(clip_data)} clips prêts avec métadonnées", "success", "complete", 100)
         jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None}
         
         # Nettoyage des fichiers sources (sauf fichiers utilisateur)

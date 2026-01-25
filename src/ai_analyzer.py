@@ -176,29 +176,45 @@ Réponds avec CE FORMAT JSON EXACT:
         # Estimer le nombre de tokens (~4 chars = 1 token)
         estimated_tokens = len(full_transcript) // 4
         
-        # Si la transcription est trop longue (> 6000 tokens), utiliser l'ancien système
-        if estimated_tokens > 6000:
-            console.print(f"[yellow]⚠️ Transcription longue ({estimated_tokens} tokens), mode segment par segment[/yellow]")
+        # 🚀 Obtenir la taille de contexte du LLM chargé
+        try:
+            from .local_llm import LocalLLM
+            llm_context_size = LocalLLM.get_context_size()
+        except:
+            llm_context_size = 8192  # Fallback conservateur
+        
+        # Seuil adaptatif: 85% de la capacité du contexte (marge pour le prompt système)
+        # Exemple: 32K ctx → seuil 27K tokens, 16K ctx → seuil 13.6K tokens
+        adaptive_threshold = int(llm_context_size * 0.85)
+        
+        console.print(f"[dim]Contexte LLM: {llm_context_size} tokens, Seuil: {adaptive_threshold} tokens[/dim]")
+        
+        # Si la transcription dépasse le seuil adaptatif, utiliser l'ancien système
+        if estimated_tokens > adaptive_threshold:
+            console.print(f"[yellow]⚠️ Transcription longue ({estimated_tokens} tokens > {adaptive_threshold}), mode segment par segment[/yellow]")
             return self._analyze_segment_by_segment(segments, video_duration, progress_callback)
         
         # ✨ ANALYSE GLOBALE (RAPIDE)
-        console.print(f"[cyan]✨ Analyse globale ({estimated_tokens} tokens, ~10-30s)[/cyan]")
+        console.print(f"[cyan]✨ Analyse globale ({estimated_tokens} tokens, mode rapide activé)[/cyan]")
         
         if progress_callback:
             progress_callback(0.1, "Analyse globale en cours...")
         
         # Créer le prompt global
+        # Limiter selon le contexte disponible (85% du ctx - taille du prompt système)
+        max_transcript_chars = (llm_context_size * 4) - 2000  # Marge pour système + output
         prompt = self.GLOBAL_PROMPT_TEMPLATE.format(
             duration=video_duration,
-            transcript=full_transcript[:24000]  # Max 6000 tokens
+            transcript=full_transcript[:max_transcript_chars]
         )
         
         try:
-            # Générer avec le LLM (1 seul appel)
+            # 🚀 Générer avec paramètres optimisés
             response = self.llm.generate(
                 prompt,
-                max_tokens=1500,  # Assez pour 10-15 moments
-                temperature=0.2,  # Un peu de créativité
+                max_tokens=800,      # ⚡ Réduit de 1500 → 800 (moments sans détails verbeux)
+                temperature=0.1,     # ⚡ Réduit de 0.2 → 0.1 (plus déterministe = plus rapide)
+                top_p=0.9,           # Échantillonnage nucleus pour cohérence
                 stop=["<|end|>", "\n\n\n"]
             )
             

@@ -6,6 +6,11 @@ Phi-4-mini-instruct (3.8B params):
 - Contexte: 128K tokens
 - Vocabulaire: 200K tokens
 - Format: <|system|>...<|end|><|user|>...<|end|><|assistant|>
+
+Optimisation dynamique:
+- Détecte automatiquement la RAM disponible
+- Ajuste n_ctx pour utiliser max 50% de la RAM système
+- Permet analyse globale pour vidéos longues (jusqu'à 2h)
 """
 
 import os
@@ -19,6 +24,66 @@ from rich.console import Console
 
 # Supprimer les warnings ggml_metal pour bf16 (non supporté sur certains GPU)
 logging.getLogger("llama_cpp").setLevel(logging.ERROR)
+
+
+def get_optimal_context_size(max_ram_usage_percent: float = 50.0) -> int:
+    """
+    Calcule la taille de contexte optimale selon la RAM disponible.
+    
+    Formule approximative de consommation RAM pour Phi-4-mini (Q4_K_M quantization):
+    - Base (modèle): ~2.3 GB
+    - Contexte 4K: ~0.5 GB
+    - Contexte 8K: ~1.0 GB
+    - Contexte 16K: ~2.5 GB
+    - Contexte 32K: ~6.0 GB
+    - Contexte 64K: ~14.0 GB
+    
+    Args:
+        max_ram_usage_percent: % de RAM système à utiliser au maximum (défaut: 50%)
+    
+    Returns:
+        Taille de contexte optimale (puissance de 2: 2048, 4096, 8192, 16384, 32768, 65536)
+    """
+    try:
+        import psutil
+        
+        # RAM totale du système
+        total_ram_gb = psutil.virtual_memory().total / (1024**3)
+        
+        # RAM disponible pour le LLM (50% par défaut)
+        available_for_llm = total_ram_gb * (max_ram_usage_percent / 100.0)
+        
+        # Estimer la taille de contexte selon la RAM disponible
+        # Formule: RAM_ctx = 0.5 + (n_ctx / 4096) * 1.5 GB
+        # Résolution: n_ctx = ((RAM_ctx - 0.5) / 1.5) * 4096
+        
+        if available_for_llm >= 18.0:
+            # 18+ GB → 64K tokens
+            return 65536
+        elif available_for_llm >= 10.0:
+            # 10-18 GB → 32K tokens
+            return 32768
+        elif available_for_llm >= 6.0:
+            # 6-10 GB → 16K tokens
+            return 16384
+        elif available_for_llm >= 4.0:
+            # 4-6 GB → 8K tokens
+            return 8192
+        elif available_for_llm >= 3.0:
+            # 3-4 GB → 4K tokens
+            return 4096
+        else:
+            # < 3 GB → 2K tokens (minimal)
+            return 2048
+            
+    except ImportError:
+        # Si psutil n'est pas installé, utiliser une valeur conservatrice
+        console.print("[yellow]⚠ psutil non installé, contexte par défaut: 8192[/yellow]")
+        console.print("[dim]Installe psutil pour optimisation automatique: pip install psutil[/dim]")
+        return 8192
+    except Exception as e:
+        console.print(f"[yellow]⚠ Erreur détection RAM: {e}, contexte par défaut: 8192[/yellow]")
+        return 8192
 
 
 @contextmanager
@@ -115,14 +180,25 @@ class LocalLLM:
         model_name = Path(model_path).name.lower()
         if 'phi-4' in model_name or 'phi4' in model_name:
             model_display = "Phi-4-mini"
-            n_ctx = 4096  # Phi-4 supporte 128K mais on limite pour la RAM
+            # 🚀 Optimisation: Contexte dynamique selon RAM disponible
+            n_ctx = get_optimal_context_size(max_ram_usage_percent=50.0)
         else:
             model_display = "Phi-3-mini"
-            n_ctx = 2048  # Phi-3 a un contexte de 4K
+            # Phi-3 a un contexte max de 4K, limiter à 2K pour sécurité
+            n_ctx = min(2048, get_optimal_context_size(max_ram_usage_percent=50.0))
         
         console.print(f"[cyan]Chargement de {model_display} local...[/cyan]")
         console.print(f"[dim]Modèle: {Path(model_path).name}[/dim]")
-        console.print(f"[dim]Threads: {n_threads}, Contexte: {n_ctx}[/dim]")
+        console.print(f"[dim]Threads: {n_threads}, Contexte: {n_ctx} tokens[/dim]")
+        
+        # Afficher estimation RAM
+        try:
+            import psutil
+            total_ram_gb = psutil.virtual_memory().total / (1024**3)
+            estimated_ram_gb = 2.3 + (n_ctx / 4096) * 2.5  # Formule approximative
+            console.print(f"[dim]RAM système: {total_ram_gb:.1f} GB, Estimée LLM: ~{estimated_ram_gb:.1f} GB[/dim]")
+        except:
+            pass
 
         # Détecter si on est sur Mac (Apple Silicon) pour activer Metal
         import platform
@@ -167,6 +243,26 @@ class LocalLLM:
             raise RuntimeError(f"Erreur lors du chargement du modèle: {e}")
 
         self._initialized = True
+
+    @staticmethod
+    def get_context_size() -> int:
+        """
+        Retourne la taille du contexte actuellement chargé.
+        Utile pour adapter les seuils dans ai_analyzer.
+        
+        Returns:
+            Taille du contexte en tokens (ex: 4096, 16384, 32768)
+        """
+        if LocalLLM._llm is None:
+            # Si modèle pas encore chargé, estimer selon RAM
+            return get_optimal_context_size(max_ram_usage_percent=50.0)
+        
+        try:
+            # Accéder au contexte du modèle chargé
+            return LocalLLM._llm.n_ctx()
+        except:
+            # Fallback: estimer selon RAM
+            return get_optimal_context_size(max_ram_usage_percent=50.0)
 
     @staticmethod
     def _find_model() -> Optional[str]:
