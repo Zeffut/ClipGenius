@@ -303,8 +303,10 @@ class LocalLLM:
         filename = model_info["filename"]
         size_gb = model_info["size_gb"]
         
-        # Dossier de destination: App/models/
-        models_dir = Path.cwd() / "models"
+        # Dossier de destination: App/models/ (chemin absolu basé sur ce fichier)
+        # __file__ = App/src/local_llm.py → parent.parent = App/
+        app_dir = Path(__file__).resolve().parent.parent
+        models_dir = app_dir / "models"
         models_dir.mkdir(exist_ok=True)
         
         dest_path = models_dir / filename
@@ -389,10 +391,13 @@ class LocalLLM:
             "phi-3-mini-4k-instruct-q4_k_m.gguf",
         ]
         
-        # Dossiers de recherche
+        # Dossiers de recherche (chemin absolu basé sur ce fichier)
+        app_dir = Path(__file__).resolve().parent.parent  # App/
         search_dirs = [
-            Path.cwd(),
-            Path.cwd() / "models",
+            app_dir,                                      # App/
+            app_dir / "models",                           # App/models/
+            Path.cwd(),                                   # Répertoire courant
+            Path.cwd() / "models",                        # ./models/
             Path.home() / ".cache" / "lm-studio" / "models",
             Path.home() / ".cache" / "huggingface" / "hub",
             Path.home() / "models",
