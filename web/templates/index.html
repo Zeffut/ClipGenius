@@ -1084,8 +1084,25 @@
 
         .clips-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+        }
+        
+        /* Responsive: moins de colonnes sur petits écrans */
+        @media (max-width: 1400px) {
+            .clips-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        @media (max-width: 1100px) {
+            .clips-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 800px) {
+            .clips-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         .clip-card {
@@ -4811,7 +4828,6 @@
                                 <div class="clip-metadata">
                                     <span class="clip-badge score">⭐ ${clip.score.toFixed(2)}</span>
                                     <span class="clip-badge duration">⏱️ ${clip.duration}s</span>
-                                    <span class="clip-badge">💾 ${clip.size.toFixed(1)}MB</span>
                                 </div>
                             </div>
                         </div>
