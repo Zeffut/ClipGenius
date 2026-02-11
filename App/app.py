@@ -399,6 +399,9 @@ def run_main_app():
     """Lance l'application principale"""
     global webview
     
+    # Référence module-level pour empêcher le garbage collection de l'activité NSProcessInfo
+    _ns_activity = None
+    
     # Supprimer les logs verbeux
     os.environ['GLOG_minloglevel'] = '2'
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -424,7 +427,7 @@ def run_main_app():
                 )
                 
                 # Démarrer une activité en arrière-plan avec ces options
-                activity = info.beginActivityWithOptions_reason_(
+                _ns_activity = info.beginActivityWithOptions_reason_(
                     activity_options,
                     "ClipGenius: Analyse et génération de clips vidéo"
                 )
@@ -492,9 +495,6 @@ def run_main_app():
     from web_app import app as flask_app
     print("✓ Interface prête!")
     
-    # Créer le dossier output
-    Path('output').mkdir(exist_ok=True)
-    
     if WEBVIEW_AVAILABLE:
         import logging
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
@@ -528,10 +528,10 @@ def run_main_app():
             title='ClipGenius',
             url='http://127.0.0.1:5001',
             width=1200,
-            height=800,  # Réduit de 900 à 800 pour laisser de l'espace
-            resizable=True,
-            min_size=(800, 600),
-            background_color='#0d0d0d',  # Fond sombre comme le HTML
+            height=800,
+            resizable=False,  # Taille fixe, pas de resize
+            fullscreen=False,  # Pas de plein écran
+            background_color='#0d0d0d',
             js_api=api,
             on_top=False,
             confirm_close=False

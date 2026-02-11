@@ -8,10 +8,10 @@ Puis ouvre http://localhost:5555/test-video dans ton navigateur
 import sys
 from pathlib import Path
 
-# Ajouter le dossier au path
-sys.path.insert(0, str(Path(__file__).parent))
+# Ajouter le dossier App au path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from web_app import app
+from web_app import app, socketio
 
 if __name__ == '__main__':
     print("=" * 60)
@@ -29,7 +29,8 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
     
-    app.run(
+    socketio.run(
+        app,
         host='127.0.0.1',
         port=5555,
         debug=True,

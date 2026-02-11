@@ -127,6 +127,7 @@ Réponds avec CE FORMAT JSON EXACT:
         max_clip_duration: float = 90.0,
         max_clips: int = 5,  # Réduit de 10 à 5 pour éviter trop de clips
         min_viral_score: float = 0.70,  # Seuil minimum de qualité
+        content_type: str = "unknown",  # Type de contenu pour adapter l'analyse
     ):
         """
         Initialise l'analyseur local.
@@ -138,6 +139,7 @@ Réponds avec CE FORMAT JSON EXACT:
             max_clip_duration: Durée maximum des clips
             max_clips: Nombre maximum de clips (défaut: 5)
             min_viral_score: Score minimum pour qu'un moment soit retenu (défaut: 0.70)
+            content_type: Type de contenu (podcast, interview, comedy, etc.)
         """
         from .local_llm import LocalLLM
 
@@ -146,6 +148,10 @@ Réponds avec CE FORMAT JSON EXACT:
         self.max_clip_duration = max_clip_duration
         self.max_clips = max_clips
         self.min_viral_score = min_viral_score
+        self.content_type = content_type.lower()
+        
+        # Types de contenu "calmes" où l'excitation audio n'est pas pertinente
+        self.calm_content_types = {"podcast", "interview", "tutorial", "news", "motivational"}
 
     def analyze(
         self,
@@ -175,10 +181,15 @@ Réponds avec CE FORMAT JSON EXACT:
         console.print("[cyan]Analyse locale du contenu (Phi-4-mini)...[/cyan]")
         
         # 🎯 NOUVELLE STRATÉGIE: Découper en sections de ~15 minutes
-        # Pour chaque section → analyse indépendante → 3-5 meilleurs moments
-        # Résultat: Vidéo 1h30 → 6 sections → 18-30 clips au total
+        # Pour chaque section → analyse indépendante → 2-3 meilleurs moments
+        # Limiter le nombre total en fonction de la durée
         
         SECTION_DURATION = 900  # 15 minutes = 900 secondes
+        
+        # Calculer un max_clips intelligent basé sur la durée
+        # Règle: ~1 clip par 3-4 minutes de vidéo, minimum 1, maximum self.max_clips
+        smart_max_clips = max(1, min(self.max_clips, int(video_duration / 180)))  # 1 clip / 3 min
+        console.print(f"[dim]Durée: {video_duration/60:.1f}min → max {smart_max_clips} clips[/dim]")
         
         # Découper la vidéo en sections de 15 minutes
         sections = self._split_into_sections(segments, video_duration, SECTION_DURATION)
@@ -224,9 +235,9 @@ Réponds avec CE FORMAT JSON EXACT:
         
         console.print(f"[green]✅ {len(all_moments)} moments viraux détectés au total[/green]")
         
-        # Trier par score et valider
+        # Trier par score et valider (utiliser smart_max_clips)
         all_moments.sort(key=lambda m: m.score, reverse=True)
-        validated = self._validate_moments(all_moments, video_duration)
+        validated = self._validate_moments(all_moments, video_duration, max_clips_override=smart_max_clips)
         
         console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(all_moments)}[/cyan]")
         
@@ -305,6 +316,31 @@ Réponds avec CE FORMAT JSON EXACT:
         section_end = section_segments[-1].end
         section_duration = section_end - section_start
         
+        # Adapter les critères selon le type de contenu
+        is_calm_content = self.content_type in self.calm_content_types
+        
+        if is_calm_content:
+            # === PROMPT POUR CONTENU CALME (podcast, interview, tutorial) ===
+            # L'excitation audio n'est PAS un critère - on cherche la VALEUR du message
+            criteria_text = """CRITÈRES POUR CONTENU CONVERSATIONNEL:
+- Idée forte ou conseil actionnable (pas besoin d'excitation)
+- Message clair et autonome (compréhensible seul)
+- Point de vue intéressant ou contre-intuitif
+- Révélation, anecdote marquante ou moment de vérité
+- Phrase quotable ou mémorable
+
+NE PAS chercher:
+- Les moments "excités" ou à haute énergie
+- Les rires ou réactions bruyantes
+- L'intensité vocale (non pertinent pour ce type de contenu)"""
+        else:
+            # === PROMPT POUR CONTENU EXCITÉ (comedy, gaming, action) ===
+            criteria_text = """CRITÈRES STRICTS:
+- Accroche TRÈS forte dès la première phrase (capter l'attention en 3s)
+- Émotion intense (humour fort, surprise majeure, tension palpable)
+- Message complet et autonome (compréhensible hors contexte)
+- Début ET fin sur des limites de phrases"""
+        
         # Créer le prompt pour cette section
         prompt = f"""<|system|>
 Tu es un expert en contenu viral pour TikTok/Reels/Shorts. Tu identifies les meilleurs moments d'une section de vidéo.
@@ -314,27 +350,46 @@ Voici la transcription de la SECTION {section_num}/{total_sections} (durée: {se
 
 {section_transcript}
 
-MISSION:
-Identifie les 2 à 3 MEILLEURS moments viraux de cette section (30-90s chacun).
-Sois TRÈS SÉLECTIF - ne retiens que les moments vraiment exceptionnels.
+TYPE DE CONTENU: {self.content_type.upper()}
 
-CRITÈRES STRICTS:
-- Accroche TRÈS forte au début (doit capter l'attention en 3s)
-- Émotion intense (humour fort, surprise majeure, tension palpable)
-- Message complet et autonome (compréhensible hors contexte)
-- Fort potentiel de partage et d'engagement
+MISSION:
+Identifie les 2 à 3 MEILLEURS moments de cette section (30-90s chacun).
+Sois TRÈS SÉLECTIF - ne retiens que les moments vraiment pertinents.
+
+RÈGLE CRITIQUE - HOOK (les 3 premières secondes):
+Le clip DOIT commencer AU DÉBUT d'une phrase accrocheuse, JAMAIS en plein milieu.
+Exemples de BONS hooks:
+- Question rhétorique: "Est-ce que vous saviez que...?" / "Pourquoi personne ne parle de...?"
+- Affirmation choc: "C'est la pire erreur que font 90% des gens"
+- Interpellation: "Attendez, vous allez pas croire ça"
+- Promesse de valeur: "Voici 3 secrets que personne ne vous dit"
+- Début d'histoire: "Il y a 2 ans, j'ai découvert quelque chose..."
+
+Exemples de MAUVAIS hooks (à éviter):
+- "...et donc voilà pourquoi" (commence au milieu)
+- "Euh... donc..." (hésitation)
+- "Ouais c'est ça" (réponse sans contexte)
+
+RÈGLE CRITIQUE - FIN DU CLIP:
+Le clip DOIT finir À LA FIN d'une phrase, JAMAIS au milieu.
+Cherche une ponctuation (. ! ?) ou une pause naturelle.
+
+{criteria_text}
 
 INSTRUCTIONS:
 1. Analyse TOUTE cette section
-2. Repère les 2-3 moments les plus EXCEPTIONNELS uniquement
-3. Score: 0.85+ = viral assuré, 0.70-0.85 = bon potentiel, <0.70 = ne pas inclure
-4. Ne retourne QUE les moments avec score >= 0.70
+2. Repère les 2-3 moments les plus pertinents uniquement
+3. Pour chaque moment: vérifie que start = DÉBUT d'une phrase accrocheuse
+4. Pour chaque moment: vérifie que end = FIN d'une phrase
+5. Score: 0.85+ = excellent, 0.70-0.85 = bon potentiel, <0.70 = ne pas inclure
 
 FORMAT JSON EXACT (tableau de 2-3 moments max):
 [
-  {{"start": 15, "end": 65, "score": 0.88, "hook": "phrase accrocheuse", "emotion": "humour", "reason": "explication courte"}},
-  {{"start": 120, "end": 180, "score": 0.75, "hook": "autre phrase", "emotion": "surprise", "reason": "pourquoi viral"}}
+  {{"start": 15, "end": 65, "score": 0.88, "hook": "La phrase d'accroche complète qui débute le clip", "emotion": "insight", "reason": "explication courte"}},
+  {{"start": 120, "end": 180, "score": 0.75, "hook": "Autre phrase d'accroche", "emotion": "conseil", "reason": "pourquoi pertinent"}}
 ]
+
+IMPORTANT: Le champ "hook" doit contenir la VRAIE première phrase du clip (copiée de la transcription).
 
 Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 <|assistant|>
@@ -417,8 +472,82 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             console.print(f"[dim]Réponse LLM: {response_text[:200]}...[/dim]")
         
         moments.sort(key=lambda m: m.score, reverse=True)
-        # Retourner tous les moments trouvés (le tri final se fait dans analyze())
+        
+        # Snap aux limites de phrases pour éviter de couper au milieu
+        moments = [self._snap_to_sentence_boundaries(m, segments) for m in moments]
+        
         return moments
+    
+    def _snap_to_sentence_boundaries(
+        self, 
+        moment: ViralMomentAI, 
+        segments: List[TranscriptSegment]
+    ) -> ViralMomentAI:
+        """
+        Ajuste les timestamps pour commencer/finir sur des limites de phrases.
+        
+        Cherche le début de phrase le plus proche pour start_time,
+        et la fin de phrase la plus proche pour end_time.
+        """
+        if not segments:
+            return moment
+        
+        # Marge de recherche (en secondes)
+        SEARCH_WINDOW = 5.0
+        
+        # === SNAP DU DÉBUT ===
+        # Chercher le segment qui contient ou précède start_time
+        best_start = moment.start_time
+        for seg in segments:
+            # Segment dans la fenêtre de recherche
+            if abs(seg.start - moment.start_time) <= SEARCH_WINDOW:
+                text = seg.text.strip()
+                
+                # Si le segment commence par une majuscule ou après ponctuation = bon début
+                if text and (text[0].isupper() or seg.start == 0):
+                    # Préférer un début légèrement avant le timestamp LLM
+                    if seg.start <= moment.start_time:
+                        best_start = seg.start
+                        break
+                    # Ou légèrement après si pas d'autre option
+                    elif best_start == moment.start_time:
+                        best_start = seg.start
+        
+        # === SNAP DE LA FIN ===
+        # Chercher la fin de phrase la plus proche de end_time
+        best_end = moment.end_time
+        for seg in segments:
+            if abs(seg.end - moment.end_time) <= SEARCH_WINDOW:
+                text = seg.text.strip()
+                
+                # Si le segment finit par ponctuation forte = bonne fin
+                if text and text[-1] in '.!?':
+                    # Préférer une fin légèrement après le timestamp LLM
+                    if seg.end >= moment.end_time:
+                        best_end = seg.end
+                        break
+                    # Ou légèrement avant si pas d'autre option
+                    elif best_end == moment.end_time:
+                        best_end = seg.end
+        
+        # Vérifier que la durée reste valide
+        new_duration = best_end - best_start
+        if new_duration < self.min_clip_duration:
+            # Durée trop courte, étendre la fin
+            best_end = best_start + self.min_clip_duration
+        elif new_duration > self.max_clip_duration:
+            # Durée trop longue, raccourcir la fin
+            best_end = best_start + self.max_clip_duration
+        
+        # Créer un nouveau moment avec les timestamps ajustés
+        return ViralMomentAI(
+            start_time=best_start,
+            end_time=best_end,
+            score=moment.score,
+            hook=moment.hook,
+            emotion=moment.emotion,
+            reason=moment.reason
+        )
     
     def _analyze_segment_by_segment(
         self,
@@ -636,10 +765,16 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
     def _validate_moments(
         self,
         moments: List[ViralMomentAI],
-        video_duration: float
+        video_duration: float,
+        max_clips_override: Optional[int] = None
     ) -> List[ViralMomentAI]:
         """
         Valide, fusionne et filtre les moments détectés.
+        
+        Args:
+            moments: Liste des moments à valider
+            video_duration: Durée totale de la vidéo
+            max_clips_override: Si défini, utilise cette valeur au lieu de self.max_clips
         
         Améliorations:
         - Utilise self.min_viral_score au lieu d'un seuil hardcodé
@@ -742,8 +877,9 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             valid.append(moment)
             used_ranges.append((start, end))
 
-            # Limiter au nombre max de clips
-            if len(valid) >= self.max_clips:
+            # Limiter au nombre max de clips (utiliser override si fourni)
+            effective_max_clips = max_clips_override if max_clips_override is not None else self.max_clips
+            if len(valid) >= effective_max_clips:
                 break
 
         # Fallback: si aucun moment valide, prendre le meilleur candidat
@@ -770,7 +906,8 @@ def analyze_with_ai(
     min_viral_score: float = 0.70,
     model_path: Optional[str] = None,
     video_path: Optional[str] = None,
-    progress_callback: Optional[Callable[[float, str], None]] = None
+    progress_callback: Optional[Callable[[float, str], None]] = None,
+    content_type: str = "unknown"
 ) -> List[ViralMomentAI]:
     """
     Fonction utilitaire pour analyser avec l'IA locale.
@@ -788,6 +925,7 @@ def analyze_with_ai(
         model_path: Chemin vers le modèle (optionnel, auto-detect)
         video_path: Chemin vers la vidéo (optionnel)
         progress_callback: Callback optionnel (progress: float 0-1, message: str)
+        content_type: Type de contenu pour adapter l'analyse (podcast, interview, comedy, etc.)
 
     Returns:
         Liste des moments viraux
@@ -799,7 +937,8 @@ def analyze_with_ai(
             min_clip_duration=min_duration,
             max_clip_duration=max_duration,
             max_clips=max_clips,
-            min_viral_score=min_viral_score
+            min_viral_score=min_viral_score,
+            content_type=content_type
         )
         return analyzer.analyze(
             segments, 

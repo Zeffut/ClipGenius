@@ -211,7 +211,7 @@ class LocalLLM:
             total_ram_gb = psutil.virtual_memory().total / (1024**3)
             estimated_ram_gb = 2.3 + (n_ctx / 4096) * 2.5  # Formule approximative
             console.print(f"[dim]RAM système: {total_ram_gb:.1f} GB, Estimée LLM: ~{estimated_ram_gb:.1f} GB[/dim]")
-        except:
+        except Exception:
             pass
 
         # Détecter si on est sur Mac (Apple Silicon) pour activer Metal
@@ -274,7 +274,7 @@ class LocalLLM:
         try:
             # Accéder au contexte du modèle chargé
             return LocalLLM._llm.n_ctx()
-        except:
+        except Exception:
             # Fallback: estimer selon RAM
             return get_optimal_context_size(max_ram_usage_percent=50.0)
 
@@ -365,7 +365,7 @@ class LocalLLM:
             if temp_path.exists():
                 try:
                     temp_path.unlink()
-                except:
+                except Exception:
                     pass
         
         return None
@@ -401,7 +401,6 @@ class LocalLLM:
             Path.home() / ".cache" / "lm-studio" / "models",
             Path.home() / ".cache" / "huggingface" / "hub",
             Path.home() / "models",
-            Path("/models"),
         ]
         
         for directory in search_dirs:

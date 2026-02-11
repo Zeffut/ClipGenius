@@ -463,7 +463,7 @@ class AdvancedAudioAnalyzer:
                 # Coefficient de variation du pitch
                 return float(np.std(pitch_values) / (np.mean(pitch_values) + 1e-8))
             return 0.0
-        except:
+        except Exception:
             return 0.0
     
     def _classify_emotion(
@@ -654,19 +654,23 @@ if __name__ == "__main__":
         from moviepy import VideoFileClip
         
         video_path = sys.argv[1]
-        video = VideoFileClip(video_path)
-        
-        # Extraire l'audio temporairement
-        audio_path = "temp_audio.wav"
-        if video.audio:
-            video.audio.write_audiofile(audio_path, fps=22050, logger=None)
-        
-        moments = analyze_audio_advanced(audio_path, video.duration)
-        
-        print(f"\n{len(moments)} moments viraux détectés:")
-        for i, m in enumerate(moments, 1):
-            print(f"  {i}. {m.start_time:.1f}s - {m.end_time:.1f}s (score: {m.score:.2f})")
-            print(f"     {m.reason}")
-        
-        video.close()
-        Path(audio_path).unlink(missing_ok=True)
+        video = None
+        try:
+            video = VideoFileClip(video_path)
+            
+            # Extraire l'audio temporairement
+            audio_path = "temp_audio.wav"
+            if video.audio:
+                video.audio.write_audiofile(audio_path, fps=22050, logger=None)
+            
+            moments = analyze_audio_advanced(audio_path, video.duration)
+            
+            print(f"\n{len(moments)} moments viraux détectés:")
+            for i, m in enumerate(moments, 1):
+                print(f"  {i}. {m.start_time:.1f}s - {m.end_time:.1f}s (score: {m.score:.2f})")
+                print(f"     {m.reason}")
+            
+            Path(audio_path).unlink(missing_ok=True)
+        finally:
+            if video:
+                video.close()

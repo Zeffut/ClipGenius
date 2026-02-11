@@ -1777,6 +1777,8 @@
             }
         }
     </style>
+    <!-- Socket.IO Client pour WebSocket temps réel -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 <body>
     <!-- Titlebar -->
@@ -2434,12 +2436,7 @@
                 }
             }
             
-            // 3. Mettre à jour le subtitle de Configuration
-            const configNavSubtitle = document.getElementById('configNavSubtitle');
-            if (configNavSubtitle) {
-                const confidence = window.analysisData.confidence;
-                configNavSubtitle.textContent = `${contentType.charAt(0).toUpperCase() + contentType.slice(1)} (${Math.round(confidence * 100)}%)`;
-            }
+            // Note: configNavSubtitle est maintenant mis à jour via selectPreset()
             
             // Auto-config appliquée (pas de notification)
         }
@@ -2700,14 +2697,26 @@
                     throw new Error('Impossible de démarrer l\'analyse');
                 }
 
-                // === STEP 2: Stream progress via SSE ===
-                const eventSource = new EventSource(`/api/stream/${job_id}`);
+                // === STEP 2: Stream progress via WebSocket ===
+                // Utilisation de Socket.IO au lieu de SSE
+                const socket = io({
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 120000  // 2 minutes timeout
+                });
+                
+                // Rejoindre la room du job pour recevoir les updates
+                socket.emit('join_job', { job_id: job_id });
                 
                 // Variable pour garder le pourcentage maximum (éviter les régressions)
                 let maxProgress = 0;
                 
-                eventSource.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
+                // Handler pour les messages de progression
+                const progressHandler = (data) => {
+                    // Ignorer les messages d'autres jobs
+                    if (data.job_id !== job_id) return;
                     
                     // Ignorer heartbeats
                     if (data.level === 'heartbeat') return;
@@ -2767,7 +2776,9 @@
                             setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'complete') {
-                        eventSource.close();
+                        // Cleanup: quitter la room et retirer le handler
+                        socket.emit('leave_job', { job_id: job_id });
+                        socket.off('progress', progressHandler);
                         
                         // Complete all steps
                         allSteps.forEach(step => step.classList.add('completed'));
@@ -2830,15 +2841,19 @@
                             });
                             
                     } else if (step === 'error') {
-                        eventSource.close();
+                        socket.emit('leave_job', { job_id: job_id });
+                        socket.off('progress', progressHandler);
                         throw new Error(message || 'Erreur d\'analyse');
                     }
                 };
                 
-                eventSource.onerror = () => {
-                    eventSource.close();
-                    console.error('Erreur SSE');
-                };
+                // Enregistrer le handler de progression
+                socket.on('progress', progressHandler);
+                
+                // Handler pour les erreurs de connexion
+                socket.on('connect_error', (error) => {
+                    console.error('Erreur connexion WebSocket:', error);
+                });
 
             } catch (error) {
                 console.error('Erreur analyse:', error);
@@ -3219,6 +3234,19 @@
                     badge.style.cssText = 'position: absolute; top: 8px; left: 8px; background: var(--accent); color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;';
                     card.appendChild(badge);
                 }
+            }
+            
+            // Mettre à jour le sous-titre de Configuration avec le preset sélectionné
+            const configNavSubtitle = document.getElementById('configNavSubtitle');
+            if (configNavSubtitle) {
+                const presetLabels = {
+                    'podcast': 'Podcast',
+                    'gaming': 'Gaming',
+                    'vlog': 'Vlog',
+                    'tutorial': 'Tutoriel'
+                };
+                const label = presetLabels[presetName] || presetName.charAt(0).toUpperCase() + presetName.slice(1);
+                configNavSubtitle.textContent = isAuto ? `${label} (auto)` : label;
             }
         }
 
@@ -4031,11 +4059,12 @@
         }
 
         // ============================================================
-        // SYSTÈME DE CONNEXION ULTRA-ROBUSTE
+        // SYSTÈME DE CONNEXION WEBSOCKET ULTRA-ROBUSTE
         // ============================================================
         
-        // Track active EventSource connections and intervals for cleanup
-        let activeEventSource = null;
+        // Track active WebSocket connection and intervals for cleanup
+        let activeSocket = null;
+        let activeProgressHandler = null;
         let activeCompletionInterval = null;
         let activeHeartbeatMonitor = null;
         let lastHeartbeatTime = null;
@@ -4053,13 +4082,16 @@
         function cleanupAllConnections() {
             logConnection('Nettoyage de toutes les connexions');
             
-            if (activeEventSource) {
+            if (activeSocket && activeProgressHandler) {
                 try {
-                    activeEventSource.close();
+                    activeSocket.off('progress', activeProgressHandler);
+                    if (currentJobId) {
+                        activeSocket.emit('leave_job', { job_id: currentJobId });
+                    }
                 } catch (e) {
-                    logConnection(`Erreur fermeture EventSource: ${e}`, 'warn');
+                    logConnection(`Erreur cleanup WebSocket: ${e}`, 'warn');
                 }
-                activeEventSource = null;
+                activeProgressHandler = null;
             }
             
             if (activeCompletionInterval) {
@@ -4075,7 +4107,7 @@
             lastHeartbeatTime = null;
         }
         
-        // Connect to job event stream avec reconnexion automatique
+        // Connect to job event stream via WebSocket
         function connectToJobStream(jobId, existingLogs = [], isReconnect = false) {
             // Éviter les reconnexions multiples simultanées
             if (isReconnecting && !isReconnect) {
@@ -4117,12 +4149,22 @@
                 }, delay);
             };
             
-            logConnection(`Création EventSource pour job ${jobId}`);
+            logConnection(`Connexion WebSocket pour job ${jobId}`);
             
             try {
-                activeEventSource = new EventSource(`/api/stream/${jobId}`);
+                // Créer ou réutiliser la connexion Socket.IO
+                activeSocket = io({
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                    timeout: 120000  // 2 minutes timeout
+                });
+                
+                // Rejoindre la room du job
+                activeSocket.emit('join_job', { job_id: jobId });
             } catch (error) {
-                logConnection(`Erreur création EventSource: ${error}`, 'error');
+                logConnection(`Erreur création WebSocket: ${error}`, 'error');
                 attemptReconnect();
                 return;
             }
@@ -4131,14 +4173,14 @@
             lastHeartbeatTime = Date.now();
             activeHeartbeatMonitor = setInterval(() => {
                 const timeSinceLastHeartbeat = Date.now() - lastHeartbeatTime;
-                const heartbeatTimeout = 45000; // 45 secondes (heartbeat serveur = 30s)
+                const heartbeatTimeout = 180000; // 3 minutes (analyse peut être longue)
                 
                 if (timeSinceLastHeartbeat > heartbeatTimeout) {
                     logConnection(`Aucun heartbeat depuis ${timeSinceLastHeartbeat}ms - reconnexion`, 'warn');
                     cleanupAllConnections();
                     attemptReconnect();
                 }
-            }, 5000); // Vérifier toutes les 5 secondes
+            }, 10000); // Vérifier toutes les 10 secondes
             
             // ✅ POLLING DE BACKUP - Vérifier le statut du job en parallèle
             activeCompletionInterval = setInterval(() => {
@@ -4164,25 +4206,24 @@
                     });
             }, 3000); // Vérifier toutes les 3 secondes
             
-            // ✅ EVENT: onopen - Connexion établie
-            activeEventSource.onopen = () => {
-                logConnection('✅ Connexion EventSource établie');
+            // ✅ EVENT: connect - Connexion établie
+            activeSocket.on('connect', () => {
+                logConnection('✅ Connexion WebSocket établie');
                 reconnectAttempts = 0; // Reset counter on successful connection
                 isReconnecting = false;
                 lastHeartbeatTime = Date.now();
-            };
-            
-            // ✅ EVENT: onmessage - Message reçu
-            activeEventSource.onmessage = (event) => {
-                lastHeartbeatTime = Date.now(); // Update heartbeat on ANY message
+                connectionState = 'connected';
                 
-                let msg;
-                try {
-                    msg = JSON.parse(event.data);
-                } catch (e) {
-                    logConnection(`Erreur parsing message: ${e}`, 'error');
-                    return;
-                }
+                // Rejoindre la room du job (au cas où reconnexion)
+                activeSocket.emit('join_job', { job_id: jobId });
+            });
+            
+            // ✅ EVENT: progress - Message de progression reçu
+            activeProgressHandler = (msg) => {
+                // Ignorer les messages d'autres jobs
+                if (msg.job_id !== jobId) return;
+                
+                lastHeartbeatTime = Date.now(); // Update heartbeat on ANY message
                 
                 // Heartbeat - juste pour maintenir la connexion vivante
                 if (msg.level === 'heartbeat') {
@@ -4254,7 +4295,7 @@
                 // "finished" = signal final envoyé APRÈS que clip_data soit prêt dans jobs[]
                 // NOTE: On ignore "complete" qui est utilisé pour les logs de progression
                 if (msg.step === 'finished') {
-                    logConnection('🎉 Job terminé avec clips (message SSE)');
+                    logConnection('🎉 Job terminé avec clips (message WebSocket)');
                     cleanupAllConnections();
                     
                     // Fetch final status to get clips
@@ -4271,34 +4312,45 @@
                 }
 
                 if (msg.step === 'error') {
-                    logConnection('❌ Job échoué (message SSE)', 'error');
+                    logConnection('❌ Job échoué (message WebSocket)', 'error');
                     cleanupAllConnections();
                     handleJobError(msg.message || 'Une erreur est survenue');
                 }
             };
-
-            // ✅ EVENT: onerror - Erreur ou déconnexion
-            activeEventSource.onerror = (event) => {
-                logConnection('⚠️ EventSource error event', 'error');
-                
-                // Check if the connection is still open
-                if (activeEventSource && activeEventSource.readyState === EventSource.CLOSED) {
-                    logConnection('Connexion fermée, tentative de reconnexion', 'warn');
-                    
-                    // Cleanup local reference
-                    if (activeEventSource) {
-                        try {
-                            activeEventSource.close();
-                        } catch (e) {}
-                        activeEventSource = null;
-                    }
-                    
-                    // Attempt reconnection
-                    attemptReconnect();
-                } else if (activeEventSource && activeEventSource.readyState === EventSource.CONNECTING) {
-                    logConnection('EventSource en cours de reconnexion automatique', 'info');
+            
+            activeSocket.on('progress', activeProgressHandler);
+            
+            // ✅ EVENT: job_status - Statut envoyé à la reconnexion
+            activeSocket.on('job_status', (data) => {
+                logConnection(`📊 job_status reçu: ${data.status}`);
+                if (data.status === 'completed' && data.clips && data.clips.length > 0) {
+                    logConnection('🎉 Job déjà terminé (reconnexion)');
+                    cleanupAllConnections();
+                    handleJobCompletion(jobId, data);
+                } else if (data.status === 'failed' && data.error) {
+                    logConnection('❌ Job échoué (reconnexion)', 'error');
+                    cleanupAllConnections();
+                    handleJobError(data.error);
                 }
-            };
+            });
+
+            // ✅ EVENT: disconnect - Déconnexion
+            activeSocket.on('disconnect', (reason) => {
+                logConnection(`⚠️ WebSocket déconnecté: ${reason}`, 'warn');
+                connectionState = 'disconnected';
+                
+                // Socket.IO reconnecte automatiquement, mais on peut forcer si besoin
+                if (reason === 'io server disconnect') {
+                    // Le serveur a fermé la connexion, on doit reconnecter manuellement
+                    attemptReconnect();
+                }
+            });
+            
+            // ✅ EVENT: connect_error - Erreur de connexion
+            activeSocket.on('connect_error', (error) => {
+                logConnection(`⚠️ WebSocket connect_error: ${error}`, 'error');
+                connectionState = 'error';
+            });
         }
         
         // ✨ Debug UI: Afficher les informations de debug dans l'interface

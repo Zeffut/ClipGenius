@@ -93,7 +93,7 @@ def generate_tiktok_ass(
     preset_colors: Optional[Dict[str, str]],
     output_path: str,
     style_config: Optional[Dict[str, Any]] = None
-) -> str:
+) -> Optional[str]:
     """
     Génère un fichier ASS avec sous-titres style TikTok.
     
@@ -126,7 +126,7 @@ def generate_tiktok_ass(
     
     # Configuration de police
     font_name = colors.get('font_family', 'Poppins')
-    base_font_size = colors.get('base_font_size', 56)
+    base_font_size = colors.get('base_font_size', 90)  # Taille augmentée pour 1920px
     keyword_size_mult = colors.get('keyword_size_multiplier', 1.18)
     
     # Créer le fichier ASS

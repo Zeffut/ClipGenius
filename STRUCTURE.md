@@ -16,7 +16,7 @@ ClipGenius/
 │   ├── 📁 src/                      # Modules Python (14.5k lignes)
 │   │   ├── __init__.py
 │   │   ├── downloader.py               # yt-dlp YouTube downloader
-│   │   ├── ai_analyzer.py              # Analyse IA GPT-4o-mini
+│   │   ├── ai_analyzer.py              # Analyse IA locale Phi-4-mini
 │   │   ├── local_llm.py                # Phi-4-mini local offline
 │   │   ├── viral_detector.py           # Audio/video fallback
 │   │   ├── smart_cropper.py            # MediaPipe face detection
@@ -120,8 +120,7 @@ python build_mac.py         # Build .app seulement
 - `mediapipe>=0.10.8` - Détection visages
 
 **IA & Audio:**
-- `openai-whisper>=20231117` - Transcription
-- `openai>=1.0.0` - GPT-4o-mini (optionnel)
+- `openai-whisper>=20231117` - Transcription (local)
 - `llama-cpp-python>=0.2.0` - Phi-4-mini local
 
 **Interface:**
@@ -154,7 +153,7 @@ python build_mac.py         # Build .app seulement
 
 ## 🔐 Sécurité & Privacy
 
-- **100% local** : Aucune donnée envoyée (sauf API OpenAI optionnelle)
+- **100% local** : Aucune donnée envoyée vers le cloud
 - **Pas de tracking** : Aucune télémétrie
 - **Open source** : Code auditable
 - **Fichiers temporaires** : Auto-nettoyés après génération

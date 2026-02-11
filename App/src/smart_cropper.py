@@ -152,6 +152,789 @@ class FocusPoint:
     height: float = 0.5  # Hauteur normalisée de la zone d'intérêt
 
 
+# ============================================================================
+# SYSTÈME DE DÉTECTION DE TYPE DE CONTENU - Smart Crop Intelligent
+# ============================================================================
+
+from enum import Enum, auto
+
+
+class ContentType(Enum):
+    """
+    Types de contenu vidéo détectables pour adapter la stratégie de crop.
+    
+    Chaque type a des caractéristiques visuelles distinctes qui nécessitent
+    une approche de recadrage différente pour un résultat optimal.
+    """
+    FACE_CENTRIC = auto()      # Podcast, interview, vlog - visage dominant
+    SCREEN_CONTENT = auto()    # Tutoriel, coding, screencast - peu de mouvement, texte
+    ACTION_CONTENT = auto()    # Gaming, sport, action - mouvement rapide
+    MULTI_SUBJECT = auto()     # Plusieurs personnes, scènes variées
+    UNKNOWN = auto()           # Type non identifié, utiliser stratégie par défaut
+
+
+@dataclass
+class ContentAnalysis:
+    """
+    Résultat de l'analyse de contenu d'un segment vidéo.
+    
+    Contient toutes les métriques calculées pour déterminer le type de contenu
+    et la stratégie de crop optimale.
+    """
+    content_type: ContentType
+    confidence: float                    # Confiance dans la détection (0-1)
+    
+    # Métriques de visage
+    face_presence_ratio: float = 0.0     # % de frames avec visage détecté
+    face_size_avg: float = 0.0           # Taille moyenne du visage (% de la frame)
+    face_count_avg: float = 0.0          # Nombre moyen de visages par frame
+    face_stability: float = 0.0          # Stabilité de la position du visage (0-1)
+    
+    # Métriques de mouvement
+    motion_intensity: float = 0.0        # Intensité moyenne du mouvement (0-1)
+    motion_variance: float = 0.0         # Variance du mouvement (pics d'action)
+    optical_flow_magnitude: float = 0.0  # Magnitude moyenne du flux optique
+    
+    # Métriques de contenu écran
+    edge_density: float = 0.0            # Densité de contours (texte, UI)
+    color_uniformity: float = 0.0        # Uniformité des couleurs (fond uni = screencast)
+    text_region_ratio: float = 0.0       # % de la frame avec du texte potentiel
+    
+    # Métriques de scène
+    scene_change_count: int = 0          # Nombre de changements de scène
+    dominant_region: str = "center"      # Région dominante (center, top, bottom, left, right)
+
+
+class ContentTypeDetector:
+    """
+    Détecteur intelligent de type de contenu vidéo.
+    
+    Analyse les caractéristiques visuelles d'un segment vidéo pour déterminer
+    automatiquement le type de contenu et recommander la meilleure stratégie
+    de recadrage.
+    
+    Utilise plusieurs techniques d'analyse:
+    - Détection de visages (MediaPipe)
+    - Analyse de mouvement (optical flow)
+    - Détection de contours (texte/UI)
+    - Analyse colorimétrique
+    - Détection de changements de scène
+    """
+    
+    def __init__(self, sample_frames: int = 10):
+        """
+        Args:
+            sample_frames: Nombre de frames à analyser par segment
+        """
+        self.sample_frames = sample_frames
+        self._face_detector = None
+        self._prev_frame_gray = None
+    
+    def _get_face_detector(self):
+        """Initialisation lazy du détecteur de visages"""
+        if self._face_detector is None:
+            mp = _get_mediapipe()
+            self._face_detector = mp.solutions.face_detection.FaceDetection(
+                model_selection=1,
+                min_detection_confidence=0.4
+            )
+        return self._face_detector
+    
+    def analyze_segment(
+        self, 
+        video_path: str, 
+        start_time: float, 
+        end_time: float
+    ) -> ContentAnalysis:
+        """
+        Analyse un segment vidéo pour déterminer son type de contenu.
+        
+        Args:
+            video_path: Chemin vers la vidéo
+            start_time: Début du segment en secondes
+            end_time: Fin du segment en secondes
+            
+        Returns:
+            ContentAnalysis avec le type détecté et les métriques
+        """
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = 30.0  # Fallback FPS par défaut
+        duration = end_time - start_time
+        
+        # Calculer les frames à analyser
+        start_frame = int(start_time * fps)
+        end_frame = int(end_time * fps)
+        total_frames = end_frame - start_frame
+        
+        # Échantillonner uniformément
+        frame_indices = np.linspace(start_frame, end_frame - 1, self.sample_frames, dtype=int)
+        
+        # Métriques à collecter
+        faces_detected = []
+        face_sizes = []
+        face_positions = []
+        motion_scores = []
+        edge_densities = []
+        color_uniformities = []
+        
+        self._prev_frame_gray = None
+        
+        try:
+            for frame_idx in frame_indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret:
+                    continue
+                
+                h, w = frame.shape[:2]
+                
+                # 1. Analyse des visages
+                face_info = self._analyze_faces(frame, w, h)
+                faces_detected.append(face_info['count'])
+                if face_info['size'] > 0:
+                    face_sizes.append(face_info['size'])
+                    face_positions.append((face_info['x'], face_info['y']))
+                
+                # 2. Analyse du mouvement
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                motion = self._analyze_motion(gray)
+                motion_scores.append(motion)
+                
+                # 3. Analyse des contours (texte/UI)
+                edge_density = self._analyze_edges(gray)
+                edge_densities.append(edge_density)
+                
+                # 4. Analyse de l'uniformité des couleurs
+                uniformity = self._analyze_color_uniformity(frame)
+                color_uniformities.append(uniformity)
+                
+                self._prev_frame_gray = gray
+        finally:
+            cap.release()
+        
+        # Calculer les métriques agrégées
+        analysis = self._compute_analysis(
+            faces_detected, face_sizes, face_positions,
+            motion_scores, edge_densities, color_uniformities
+        )
+        
+        return analysis
+    
+    def _analyze_faces(self, frame: np.ndarray, w: int, h: int) -> Dict[str, float]:
+        """Analyse les visages dans une frame"""
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        detector = self._get_face_detector()
+        results = detector.process(rgb_frame)
+        
+        if not results.detections:
+            return {'count': 0, 'size': 0, 'x': 0.5, 'y': 0.5}
+        
+        # Prendre le plus grand visage
+        best = max(
+            results.detections,
+            key=lambda d: d.location_data.relative_bounding_box.width * 
+                         d.location_data.relative_bounding_box.height
+        )
+        bbox = best.location_data.relative_bounding_box
+        
+        return {
+            'count': len(results.detections),
+            'size': bbox.width * bbox.height,
+            'x': bbox.xmin + bbox.width / 2,
+            'y': bbox.ymin + bbox.height / 2
+        }
+    
+    def _analyze_motion(self, gray: np.ndarray) -> float:
+        """Analyse le mouvement entre frames via différence absolue"""
+        if self._prev_frame_gray is None:
+            return 0.0
+        
+        # Différence absolue (plus rapide que optical flow)
+        diff = cv2.absdiff(self._prev_frame_gray, gray)
+        motion = np.mean(diff) / 255.0
+        
+        return motion
+    
+    def _analyze_edges(self, gray: np.ndarray) -> float:
+        """Analyse la densité de contours (indicateur de texte/UI)"""
+        # Réduire la résolution pour la vitesse
+        small = cv2.resize(gray, (320, 180))
+        edges = cv2.Canny(small, 50, 150)
+        density = np.mean(edges) / 255.0
+        return density
+    
+    def _analyze_color_uniformity(self, frame: np.ndarray) -> float:
+        """Analyse l'uniformité des couleurs (fond uni = screencast probable)"""
+        # Réduire la résolution
+        small = cv2.resize(frame, (160, 90))
+        hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+        
+        # Écart-type de la saturation et de la valeur
+        s_std = np.std(hsv[:, :, 1])
+        v_std = np.std(hsv[:, :, 2])
+        
+        # Plus l'écart-type est bas, plus c'est uniforme
+        uniformity = 1.0 - min(1.0, (s_std + v_std) / 200.0)
+        return uniformity
+    
+    def _compute_analysis(
+        self,
+        faces_detected: List[int],
+        face_sizes: List[float],
+        face_positions: List[Tuple[float, float]],
+        motion_scores: List[float],
+        edge_densities: List[float],
+        color_uniformities: List[float]
+    ) -> ContentAnalysis:
+        """Calcule l'analyse finale à partir des métriques collectées"""
+        
+        # Métriques de visage
+        face_presence = sum(1 for f in faces_detected if f > 0) / max(1, len(faces_detected))
+        face_size_avg = np.mean(face_sizes) if face_sizes else 0.0
+        face_count_avg = np.mean(faces_detected) if faces_detected else 0.0
+        
+        # Stabilité du visage (variance de position)
+        face_stability = 0.0
+        if len(face_positions) > 1:
+            x_positions = [p[0] for p in face_positions]
+            y_positions = [p[1] for p in face_positions]
+            position_variance = np.std(x_positions) + np.std(y_positions)
+            face_stability = max(0, 1.0 - position_variance * 5)
+        
+        # Métriques de mouvement
+        motion_intensity = np.mean(motion_scores) if motion_scores else 0.0
+        motion_variance = np.std(motion_scores) if motion_scores else 0.0
+        
+        # Métriques de contenu écran
+        edge_density = np.mean(edge_densities) if edge_densities else 0.0
+        color_uniformity = np.mean(color_uniformities) if color_uniformities else 0.0
+        
+        # === CLASSIFICATION DU TYPE DE CONTENU ===
+        content_type = ContentType.UNKNOWN
+        confidence = 0.5
+        
+        # Règles de classification avec scores pondérés
+        scores = {
+            ContentType.FACE_CENTRIC: 0.0,
+            ContentType.SCREEN_CONTENT: 0.0,
+            ContentType.ACTION_CONTENT: 0.0,
+            ContentType.MULTI_SUBJECT: 0.0
+        }
+        
+        # FACE_CENTRIC: Visage présent, stable, taille moyenne à grande
+        if face_presence > 0.6:
+            scores[ContentType.FACE_CENTRIC] += face_presence * 0.4
+            if face_size_avg > 0.02:  # Visage occupe >2% de la frame
+                scores[ContentType.FACE_CENTRIC] += min(0.3, face_size_avg * 5)
+            if face_stability > 0.7:
+                scores[ContentType.FACE_CENTRIC] += 0.2
+            if face_count_avg < 1.5:  # Généralement 1 visage
+                scores[ContentType.FACE_CENTRIC] += 0.1
+        
+        # SCREEN_CONTENT: Peu de mouvement, beaucoup de contours, fond uniforme
+        if motion_intensity < 0.03:
+            scores[ContentType.SCREEN_CONTENT] += 0.3
+        if edge_density > 0.15:  # Beaucoup de contours (texte/code)
+            scores[ContentType.SCREEN_CONTENT] += min(0.3, edge_density * 2)
+        if color_uniformity > 0.5:
+            scores[ContentType.SCREEN_CONTENT] += 0.2
+        if face_presence < 0.3:
+            scores[ContentType.SCREEN_CONTENT] += 0.2
+        
+        # ACTION_CONTENT: Mouvement élevé, variance de mouvement
+        if motion_intensity > 0.05:
+            scores[ContentType.ACTION_CONTENT] += min(0.4, motion_intensity * 5)
+        if motion_variance > 0.02:
+            scores[ContentType.ACTION_CONTENT] += min(0.3, motion_variance * 10)
+        if face_stability < 0.3:  # Visage instable = action
+            scores[ContentType.ACTION_CONTENT] += 0.2
+        
+        # MULTI_SUBJECT: Plusieurs visages
+        if face_count_avg > 1.5:
+            scores[ContentType.MULTI_SUBJECT] += 0.5
+            if face_stability < 0.5:
+                scores[ContentType.MULTI_SUBJECT] += 0.2
+        
+        # Sélectionner le type avec le score le plus élevé
+        best_type = max(scores.items(), key=lambda x: x[1])
+        if best_type[1] > 0.3:
+            content_type = best_type[0]
+            confidence = min(0.95, best_type[1] + 0.3)
+        
+        return ContentAnalysis(
+            content_type=content_type,
+            confidence=confidence,
+            face_presence_ratio=face_presence,
+            face_size_avg=face_size_avg,
+            face_count_avg=face_count_avg,
+            face_stability=face_stability,
+            motion_intensity=motion_intensity,
+            motion_variance=motion_variance,
+            edge_density=edge_density,
+            color_uniformity=color_uniformity
+        )
+    
+    def close(self):
+        """Libère les ressources"""
+        if self._face_detector:
+            try:
+                self._face_detector.close()
+            except Exception:
+                pass
+            self._face_detector = None
+
+
+# ============================================================================
+# STRATÉGIES DE CROP ADAPTATIVES
+# ============================================================================
+
+class CropStrategy:
+    """
+    Classe de base pour les stratégies de recadrage.
+    
+    Chaque stratégie implémente une logique différente pour déterminer
+    le point de focus optimal selon le type de contenu.
+    """
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None,
+        analysis: Optional[ContentAnalysis] = None
+    ) -> FocusPoint:
+        """
+        Calcule le point de focus pour une frame.
+        
+        Args:
+            frame: Frame BGR à analyser
+            prev_focus: Point de focus précédent pour le lissage
+            analysis: Analyse de contenu (optionnel)
+            
+        Returns:
+            FocusPoint avec les coordonnées du centre d'intérêt
+        """
+        raise NotImplementedError
+
+
+class FaceTrackingStrategy(CropStrategy):
+    """
+    Stratégie de tracking de visage avec lissage Kalman.
+    
+    Idéale pour: Podcasts, interviews, vlogs, tutoriels face-cam.
+    Le visage est maintenu dans le tiers supérieur avec des mouvements fluides.
+    """
+    
+    def __init__(self):
+        self._face_detector = None
+        self.kalman_x = KalmanFilter1D(process_variance=0.003, measurement_variance=0.03)
+        self.kalman_y = KalmanFilter1D(process_variance=0.003, measurement_variance=0.03)
+    
+    def _get_detector(self):
+        if self._face_detector is None:
+            mp = _get_mediapipe()
+            self._face_detector = mp.solutions.face_detection.FaceDetection(
+                model_selection=1,
+                min_detection_confidence=0.5
+            )
+        return self._face_detector
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None,
+        analysis: Optional[ContentAnalysis] = None
+    ) -> FocusPoint:
+        h, w = frame.shape[:2]
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        detector = self._get_detector()
+        results = detector.process(rgb)
+        
+        if results.detections:
+            # Prendre le plus grand visage
+            best = max(
+                results.detections,
+                key=lambda d: d.location_data.relative_bounding_box.width * 
+                             d.location_data.relative_bounding_box.height
+            )
+            bbox = best.location_data.relative_bounding_box
+            
+            raw_x = bbox.xmin + bbox.width / 2
+            raw_y = bbox.ymin + bbox.height / 2
+            
+            # Appliquer le filtre de Kalman pour lisser
+            smooth_x = self.kalman_x.update(raw_x)
+            smooth_y = self.kalman_y.update(raw_y)
+            
+            return FocusPoint(
+                x=smooth_x,
+                y=smooth_y,
+                confidence=best.score[0],
+                width=bbox.width * 2,
+                height=bbox.height * 2
+            )
+        
+        # Pas de visage détecté: utiliser le précédent ou le centre
+        if prev_focus:
+            return prev_focus
+        return FocusPoint(x=0.5, y=0.4, confidence=0.1)
+    
+    def reset(self):
+        """Réinitialise les filtres de Kalman"""
+        self.kalman_x.reset()
+        self.kalman_y.reset()
+    
+    def close(self):
+        if self._face_detector:
+            try:
+                self._face_detector.close()
+            except Exception:
+                pass
+            self._face_detector = None
+
+
+class CenterWeightedStrategy(CropStrategy):
+    """
+    Stratégie de crop centrée avec pondération.
+    
+    Idéale pour: Screencasts, tutoriels code, présentations.
+    Maintient le centre de l'écran avec léger ajustement vers les zones d'activité.
+    """
+    
+    def __init__(self, center_weight: float = 0.8):
+        """
+        Args:
+            center_weight: Pondération vers le centre (0.5-1.0)
+        """
+        self.center_weight = center_weight
+        self._prev_gray = None
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None,
+        analysis: Optional[ContentAnalysis] = None
+    ) -> FocusPoint:
+        h, w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        # Par défaut: centre
+        focus_x, focus_y = 0.5, 0.5
+        
+        # Détecter les zones d'activité (changement depuis la frame précédente)
+        if self._prev_gray is not None:
+            diff = cv2.absdiff(self._prev_gray, gray)
+            
+            # Diviser en grille 3x3 et trouver la zone avec le plus de changement
+            grid_h, grid_w = h // 3, w // 3
+            max_activity = 0
+            active_region = (1, 1)  # Centre par défaut
+            
+            for row in range(3):
+                for col in range(3):
+                    region = diff[row*grid_h:(row+1)*grid_h, col*grid_w:(col+1)*grid_w]
+                    activity = np.mean(region)
+                    if activity > max_activity:
+                        max_activity = activity
+                        active_region = (row, col)
+            
+            # Ajuster légèrement vers la zone active
+            if max_activity > 5:  # Seuil minimum d'activité
+                region_y = (active_region[0] + 0.5) / 3
+                region_x = (active_region[1] + 0.5) / 3
+                
+                # Pondérer entre le centre et la zone active
+                focus_x = 0.5 * self.center_weight + region_x * (1 - self.center_weight)
+                focus_y = 0.5 * self.center_weight + region_y * (1 - self.center_weight)
+        
+        self._prev_gray = gray.copy()
+        
+        return FocusPoint(
+            x=focus_x,
+            y=focus_y,
+            confidence=0.7,
+            width=0.6,
+            height=0.8
+        )
+    
+    def reset(self):
+        self._prev_gray = None
+
+
+class MotionTrackingStrategy(CropStrategy):
+    """
+    Stratégie de tracking basée sur le mouvement.
+    
+    Idéale pour: Gaming, sport, action rapide.
+    Suit les zones de mouvement intense avec réactivité.
+    """
+    
+    def __init__(self, reactivity: float = 0.3):
+        """
+        Args:
+            reactivity: Vitesse de réaction aux mouvements (0.1-0.5)
+        """
+        self.reactivity = reactivity
+        self._prev_gray = None
+        self._smooth_x = 0.5
+        self._smooth_y = 0.5
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None,
+        analysis: Optional[ContentAnalysis] = None
+    ) -> FocusPoint:
+        h, w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        target_x, target_y = 0.5, 0.5
+        confidence = 0.5
+        
+        if self._prev_gray is not None:
+            # Calculer le flux optique simplifié (différence de frames)
+            diff = cv2.absdiff(self._prev_gray, gray)
+            
+            # Flouter pour réduire le bruit
+            diff_blur = cv2.GaussianBlur(diff, (21, 21), 0)
+            
+            # Trouver le centre de masse du mouvement
+            moments = cv2.moments(diff_blur)
+            if moments['m00'] > 1000:  # Seuil minimum de mouvement
+                target_x = moments['m10'] / moments['m00'] / w
+                target_y = moments['m01'] / moments['m00'] / h
+                confidence = min(0.9, moments['m00'] / (w * h * 50))
+        
+        # Lissage exponentiel vers la cible
+        self._smooth_x = self._smooth_x + self.reactivity * (target_x - self._smooth_x)
+        self._smooth_y = self._smooth_y + self.reactivity * (target_y - self._smooth_y)
+        
+        self._prev_gray = gray.copy()
+        
+        return FocusPoint(
+            x=self._smooth_x,
+            y=self._smooth_y,
+            confidence=confidence,
+            width=0.4,
+            height=0.5
+        )
+    
+    def reset(self):
+        self._prev_gray = None
+        self._smooth_x = 0.5
+        self._smooth_y = 0.5
+
+
+class MultiSubjectStrategy(CropStrategy):
+    """
+    Stratégie pour scènes avec plusieurs sujets.
+    
+    Idéale pour: Conversations, panels, scènes de groupe.
+    Trouve le meilleur cadrage pour inclure tous les sujets importants.
+    """
+    
+    def __init__(self, max_subjects: int = 3):
+        """
+        Args:
+            max_subjects: Nombre maximum de sujets à considérer
+        """
+        self.max_subjects = max_subjects
+        self._face_detector = None
+        self.kalman_x = KalmanFilter1D(process_variance=0.005, measurement_variance=0.05)
+        self.kalman_y = KalmanFilter1D(process_variance=0.005, measurement_variance=0.05)
+    
+    def _get_detector(self):
+        if self._face_detector is None:
+            mp = _get_mediapipe()
+            self._face_detector = mp.solutions.face_detection.FaceDetection(
+                model_selection=1,
+                min_detection_confidence=0.4
+            )
+        return self._face_detector
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None,
+        analysis: Optional[ContentAnalysis] = None
+    ) -> FocusPoint:
+        h, w = frame.shape[:2]
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        detector = self._get_detector()
+        results = detector.process(rgb)
+        
+        if results.detections:
+            # Trier par taille et prendre les N plus grands
+            sorted_detections = sorted(
+                results.detections,
+                key=lambda d: d.location_data.relative_bounding_box.width * 
+                             d.location_data.relative_bounding_box.height,
+                reverse=True
+            )[:self.max_subjects]
+            
+            # Calculer le centre de tous les visages
+            sum_x, sum_y = 0, 0
+            total_weight = 0
+            
+            for detection in sorted_detections:
+                bbox = detection.location_data.relative_bounding_box
+                weight = bbox.width * bbox.height  # Pondérer par taille
+                sum_x += (bbox.xmin + bbox.width / 2) * weight
+                sum_y += (bbox.ymin + bbox.height / 2) * weight
+                total_weight += weight
+            
+            if total_weight > 0:
+                raw_x = sum_x / total_weight
+                raw_y = sum_y / total_weight
+                
+                # Appliquer le lissage
+                smooth_x = self.kalman_x.update(raw_x)
+                smooth_y = self.kalman_y.update(raw_y)
+                
+                # Calculer la zone englobante
+                x_positions = [d.location_data.relative_bounding_box.xmin + 
+                              d.location_data.relative_bounding_box.width / 2 
+                              for d in sorted_detections]
+                y_positions = [d.location_data.relative_bounding_box.ymin + 
+                              d.location_data.relative_bounding_box.height / 2 
+                              for d in sorted_detections]
+                
+                width = max(0.4, max(x_positions) - min(x_positions) + 0.2)
+                height = max(0.5, max(y_positions) - min(y_positions) + 0.3)
+                
+                return FocusPoint(
+                    x=smooth_x,
+                    y=smooth_y,
+                    confidence=0.8,
+                    width=width,
+                    height=height
+                )
+        
+        # Fallback
+        if prev_focus:
+            return prev_focus
+        return FocusPoint(x=0.5, y=0.5, confidence=0.3)
+    
+    def reset(self):
+        self.kalman_x.reset()
+        self.kalman_y.reset()
+    
+    def close(self):
+        if self._face_detector:
+            try:
+                self._face_detector.close()
+            except Exception:
+                pass
+            self._face_detector = None
+
+
+class AdaptiveCropManager:
+    """
+    Gestionnaire de crop adaptatif qui sélectionne automatiquement
+    la meilleure stratégie selon le type de contenu détecté.
+    
+    Fonctionnalités:
+    - Détection automatique du type de contenu
+    - Sélection dynamique de la stratégie de crop
+    - Transitions fluides entre stratégies
+    - Cache des analyses pour la performance
+    """
+    
+    def __init__(self):
+        self.detector = ContentTypeDetector()
+        self.strategies: Dict[ContentType, CropStrategy] = {
+            ContentType.FACE_CENTRIC: FaceTrackingStrategy(),
+            ContentType.SCREEN_CONTENT: CenterWeightedStrategy(),
+            ContentType.ACTION_CONTENT: MotionTrackingStrategy(),
+            ContentType.MULTI_SUBJECT: MultiSubjectStrategy(),
+            ContentType.UNKNOWN: FaceTrackingStrategy(),  # Fallback
+        }
+        self._current_strategy: Optional[CropStrategy] = None
+        self._current_type: ContentType = ContentType.UNKNOWN
+        self._analysis_cache: Dict[str, ContentAnalysis] = {}
+    
+    def analyze_and_select_strategy(
+        self, 
+        video_path: str, 
+        start_time: float, 
+        end_time: float
+    ) -> Tuple[ContentType, ContentAnalysis]:
+        """
+        Analyse un segment et sélectionne la stratégie appropriée.
+        
+        Args:
+            video_path: Chemin vers la vidéo
+            start_time: Début du segment
+            end_time: Fin du segment
+            
+        Returns:
+            Tuple (ContentType détecté, ContentAnalysis complète)
+        """
+        cache_key = f"{video_path}_{start_time:.1f}_{end_time:.1f}"
+        
+        if cache_key in self._analysis_cache:
+            analysis = self._analysis_cache[cache_key]
+        else:
+            analysis = self.detector.analyze_segment(video_path, start_time, end_time)
+            self._analysis_cache[cache_key] = analysis
+        
+        self._current_type = analysis.content_type
+        self._current_strategy = self.strategies[analysis.content_type]
+        
+        # Réinitialiser la stratégie sélectionnée
+        if hasattr(self._current_strategy, 'reset'):
+            self._current_strategy.reset()
+        
+        console.print(f"[cyan]Type de contenu détecté: {analysis.content_type.name} "
+                     f"(confiance: {analysis.confidence:.0%})[/cyan]")
+        
+        return analysis.content_type, analysis
+    
+    def get_focus_point(
+        self, 
+        frame: np.ndarray, 
+        prev_focus: Optional[FocusPoint] = None
+    ) -> FocusPoint:
+        """
+        Obtient le point de focus en utilisant la stratégie actuelle.
+        
+        Args:
+            frame: Frame à analyser
+            prev_focus: Point de focus précédent
+            
+        Returns:
+            FocusPoint optimal selon la stratégie
+        """
+        if self._current_strategy is None:
+            # Fallback si pas de stratégie sélectionnée
+            self._current_strategy = self.strategies[ContentType.FACE_CENTRIC]
+        
+        return self._current_strategy.get_focus_point(frame, prev_focus)
+    
+    def get_current_type(self) -> ContentType:
+        """Retourne le type de contenu actuel"""
+        return self._current_type
+    
+    def clear_cache(self):
+        """Vide le cache d'analyses"""
+        self._analysis_cache.clear()
+    
+    def close(self):
+        """Libère toutes les ressources"""
+        self.detector.close()
+        for strategy in self.strategies.values():
+            if hasattr(strategy, 'close'):
+                strategy.close()
+
+
+# ============================================================================
+# FIN DU SYSTÈME DE SMART CROP INTELLIGENT
+# ============================================================================
+
+
 def ease_in_out_cubic(t: float) -> float:
     """
     Fonction d'interpolation ease-in-out cubique.
@@ -611,6 +1394,8 @@ class SmartCropper:
         
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = 30.0  # Fallback FPS par défaut
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         duration = total_frames / fps
         
@@ -618,37 +1403,38 @@ class SmartCropper:
         frame_interval = max(1, int(fps / sample_rate))
         frames_to_analyze = total_frames // frame_interval
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeRemainingColumn(),
-            console=console
-        ) as progress:
-            task = progress.add_task(
-                f"Analyse des points de focus ({duration:.0f}s de video)...", 
-                total=frames_to_analyze
-            )
-            
-            frame_count = 0
-            analyzed_count = 0
-            
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                console=console
+            ) as progress:
+                task = progress.add_task(
+                    f"Analyse des points de focus ({duration:.0f}s de video)...", 
+                    total=frames_to_analyze
+                )
                 
-                if frame_count % frame_interval == 0:
-                    timestamp = frame_count / fps
-                    focus_point = self.find_focus_point(frame)
-                    focus_points.append((timestamp, focus_point))
-                    analyzed_count += 1
-                    progress.update(task, advance=1)
+                frame_count = 0
+                analyzed_count = 0
                 
-                frame_count += 1
-        
-        cap.release()
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    if frame_count % frame_interval == 0:
+                        timestamp = frame_count / fps
+                        focus_point = self.find_focus_point(frame)
+                        focus_points.append((timestamp, focus_point))
+                        analyzed_count += 1
+                        progress.update(task, advance=1)
+                    
+                    frame_count += 1
+        finally:
+            cap.release()
         console.print(f"[green]Analyse terminee: {len(focus_points)} points de focus[/green]")
         
         return focus_points
@@ -679,6 +1465,8 @@ class SmartCropper:
         
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = 30.0  # Fallback FPS par défaut
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         video_duration = total_frames / fps
         
@@ -703,50 +1491,51 @@ class SmartCropper:
         
         focus_points = []
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TimeRemainingColumn(),
-            console=console
-        ) as progress:
-            task = progress.add_task(
-                f"Analyse des points de focus ({total_segment_duration:.0f}s)...", 
-                total=frames_to_analyze
-            )
-            
-            for seg_idx, (seg_start, seg_end) in enumerate(merged_segments):
-                # Réinitialiser les détecteurs entre les segments pour éviter les erreurs MediaPipe
-                if seg_idx > 0:
-                    self.reset_detectors()
+        try:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                console=console
+            ) as progress:
+                task = progress.add_task(
+                    f"Analyse des points de focus ({total_segment_duration:.0f}s)...", 
+                    total=frames_to_analyze
+                )
+                
+                for seg_idx, (seg_start, seg_end) in enumerate(merged_segments):
+                    # Réinitialiser les détecteurs entre les segments pour éviter les erreurs MediaPipe
+                    if seg_idx > 0:
+                        self.reset_detectors()
 
-                # Positionner au début du segment
-                start_frame = int(seg_start * fps)
-                end_frame = int(seg_end * fps)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                    # Positionner au début du segment
+                    start_frame = int(seg_start * fps)
+                    end_frame = int(seg_end * fps)
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
-                frame_count = start_frame
+                    frame_count = start_frame
 
-                while frame_count < end_frame:
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    
-                    if (frame_count - start_frame) % frame_interval == 0:
-                        timestamp = frame_count / fps
-                        try:
-                            focus_point = self.find_focus_point(frame)
-                        except Exception as e:
-                            # En cas d'erreur MediaPipe, réinitialiser et utiliser le centre
-                            self.reset_detectors()
-                            focus_point = FocusPoint(x=0.5, y=0.5, confidence=0.1)
-                        focus_points.append((timestamp, focus_point))
-                        progress.update(task, advance=1)
-                    
-                    frame_count += 1
-        
-        cap.release()
+                    while frame_count < end_frame:
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+                        
+                        if (frame_count - start_frame) % frame_interval == 0:
+                            timestamp = frame_count / fps
+                            try:
+                                focus_point = self.find_focus_point(frame)
+                            except Exception as e:
+                                # En cas d'erreur MediaPipe, réinitialiser et utiliser le centre
+                                self.reset_detectors()
+                                focus_point = FocusPoint(x=0.5, y=0.5, confidence=0.1)
+                            focus_points.append((timestamp, focus_point))
+                            progress.update(task, advance=1)
+                        
+                        frame_count += 1
+        finally:
+            cap.release()
         
         # Appliquer le lissage temporel pour des mouvements plus fluides
         if len(focus_points) > 3:
@@ -1028,7 +1817,8 @@ def create_blur_filled_frame(
     darken_factor: float = 0.45,
     add_vignette: bool = True,
     add_grain: bool = False,
-    saturation_boost: float = 1.1
+    saturation_boost: float = 1.1,
+    use_lanczos: bool = True  # Nouvelle option pour qualité maximale
 ) -> np.ndarray:
     """
     Crée une frame avec le sujet en haut et un fond flouté cinématique en bas.
@@ -1041,6 +1831,7 @@ def create_blur_filled_frame(
     - Vignette subtile sur le fond pour attirer l'attention sur le sujet
     - Boost de saturation léger pour des couleurs plus vivantes
     - Grain optionnel pour un look cinématique
+    - LANCZOS4 pour un redimensionnement haute qualité (anti-aliasing supérieur)
     
     Args:
         frame: Frame source BGR
@@ -1053,11 +1844,15 @@ def create_blur_filled_frame(
         add_vignette: Ajouter un effet vignette sur le fond
         add_grain: Ajouter un grain cinématique subtil
         saturation_boost: Facteur de boost de saturation (1.0 = pas de changement)
+        use_lanczos: Utiliser LANCZOS4 pour redimensionnement haute qualité
         
     Returns:
         Frame composite avec le sujet en haut, transition et blur en bas
     """
     h, w = frame.shape[:2]
+    
+    # Choisir l'interpolation: LANCZOS4 (meilleure qualité) ou LINEAR (plus rapide)
+    interpolation = cv2.INTER_LANCZOS4 if use_lanczos else cv2.INTER_LINEAR
     
     # Calculer les dimensions du crop
     crop_width = crop_result.x2 - crop_result.x1
@@ -1094,8 +1889,8 @@ def create_blur_filled_frame(
     if content_height <= 0:
         return np.zeros((target_height, target_width, 3), dtype=np.uint8)
     
-    # Redimensionner le contenu principal avec INTER_LINEAR (3-4x plus rapide que LANCZOS4)
-    content_resized = cv2.resize(cropped_content, (target_width, content_height), interpolation=cv2.INTER_LINEAR)
+    # Redimensionner le contenu principal avec interpolation haute qualité
+    content_resized = cv2.resize(cropped_content, (target_width, content_height), interpolation=interpolation)
     
     # Appliquer un boost de saturation subtil au contenu principal
     if saturation_boost != 1.0:
@@ -1113,7 +1908,7 @@ def create_blur_filled_frame(
     
     # Redimensionner et flouter
     if blur_source.size > 0 and blur_height > 0:
-        blur_resized = cv2.resize(blur_source, (target_width, blur_height), interpolation=cv2.INTER_LINEAR)
+        blur_resized = cv2.resize(blur_source, (target_width, blur_height), interpolation=interpolation)
         
         # Flou gaussien - UNE SEULE passe au lieu de 3 (3x plus rapide)
         # La qualité reste excellente avec un seul blur bien paramétré

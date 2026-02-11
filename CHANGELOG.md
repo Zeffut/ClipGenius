@@ -71,9 +71,8 @@ et ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
 
 #### Ajouté
 - **CLI avec Click** pour génération de clips
-- **Analyse IA** avec GPT-4o-mini
-- **LLM local** avec Phi-4-mini (100% offline)
-- **Fallback audio/video** si pas d'API OpenAI
+- **Analyse IA locale** avec Phi-4-mini (100% offline)
+- **Fallback audio/video** si LLM indisponible
 - **Recadrage intelligent** avec MediaPipe
 - **Sous-titres Whisper** avec transcription auto
 - **Sous-titres enrichis** style TikTok avec emojis

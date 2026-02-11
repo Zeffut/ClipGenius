@@ -16,11 +16,15 @@ import queue
 import threading
 import time
 import gc
+import uuid
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Generator
 
 from flask import Flask, render_template, request, jsonify, Response, send_from_directory
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
@@ -40,16 +44,34 @@ sys.path.insert(0, str(Path(__file__).parent))
 # - src.auto_config (AutoConfigurator, GeneratedConfig)
 
 app = Flask(__name__, template_folder='web/templates')
-app.config['SECRET_KEY'] = 'clipgenius-dev-key'
+app.config['SECRET_KEY'] = os.urandom(24).hex()
 
-# Queue globale pour les messages de log
-log_queues = {}
-
-# Buffer pour l'historique des logs (pour reconnexion)
-log_buffers = {}
+# === SOCKET.IO CONFIGURATION ===
+# async_mode='threading' pour compatibilité avec les threads de traitement
+# ping_timeout/ping_interval élevés pour les longues opérations (transcription, génération)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=["http://127.0.0.1:5001", "http://localhost:5001"],
+    async_mode='threading',
+    ping_timeout=120,      # 2 minutes avant timeout
+    ping_interval=25,      # Ping toutes les 25 secondes
+    max_http_buffer_size=10 * 1024 * 1024  # 10MB pour gros messages
+)
 
 # État global des jobs
 jobs = {}
+_jobs_lock = threading.Lock()
+JOB_TTL_SECONDS = 3600  # 1 heure
+
+
+def _cleanup_old_jobs():
+    """Supprime les jobs expirés (plus vieux que JOB_TTL_SECONDS)"""
+    now = time.time()
+    with _jobs_lock:
+        expired = [jid for jid, job in jobs.items()
+                   if now - job.get('_created', 0) > JOB_TTL_SECONDS]
+        for jid in expired:
+            del jobs[jid]
 
 
 def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "output", keep_user_files: bool = False):
@@ -75,7 +97,7 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
     if not keep_user_files and video_path and os.path.exists(video_path):
         try:
             os.remove(video_path)
-        except:
+        except Exception:
             pass
     
     # 2. Fichiers temporaires (patterns)
@@ -91,14 +113,14 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
         for f in Path('.').glob(pattern):
             try:
                 f.unlink()
-            except:
+            except Exception:
                 pass
         
         # Dossier output
         for f in Path(output_dir).glob(pattern):
             try:
                 f.unlink()
-            except:
+            except Exception:
                 pass
     
     # 3. Dossiers temporaires pycaps
@@ -106,36 +128,47 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
     for pycaps_dir in temp_base.glob('pycaps_viral_*'):
         try:
             shutil.rmtree(pycaps_dir, ignore_errors=True)
-        except:
+        except Exception:
             pass
 
 
 class LogCapture:
-    """Capture les logs et les envoie à la queue SSE + buffer pour reconnexion"""
+    """Capture les logs et les envoie via WebSocket en temps réel"""
 
     def __init__(self, job_id: str):
         self.job_id = job_id
-        self.queue = queue.Queue()
-        self.buffer = []
-        log_queues[job_id] = self.queue
-        log_buffers[job_id] = self.buffer
+        self.buffer = []  # Buffer pour historique (reconnexion)
 
     def log(self, message: str, level: str = "info", step: Optional[str] = None, progress: Optional[int] = None):
-        """Envoie un message de log"""
+        """Envoie un message de log via WebSocket"""
         data = {
             "timestamp": datetime.now().strftime("%H:%M:%S"),
             "level": level,
             "message": message,
             "step": step,
-            "progress": progress
+            "progress": progress,
+            "job_id": self.job_id
         }
         self.buffer.append(data)
-        self.queue.put(data)
+        
+        # Émettre via WebSocket vers la room du job
+        socketio.emit('progress', data, room=self.job_id)
+    
+    def heartbeat(self, step: str = "generate", progress: int = 50):
+        """Envoie un heartbeat pour maintenir la connexion active"""
+        data = {
+            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "level": "heartbeat",
+            "message": "Traitement en cours...",
+            "step": step,
+            "progress": progress,
+            "job_id": self.job_id
+        }
+        socketio.emit('progress', data, room=self.job_id)
 
     def close(self):
-        """Ferme la queue (garde le buffer pour reconnexion)"""
-        if self.job_id in log_queues:
-            del log_queues[self.job_id]
+        """Marque la fin du job (le buffer reste pour reconnexion)"""
+        pass  # Buffer conservé pour reconnexion éventuelle
 
 
 def process_video(job_id: str, url: str, options: dict):
@@ -143,14 +176,14 @@ def process_video(job_id: str, url: str, options: dict):
     
     # === LAZY IMPORTS (chargés ici pour démarrage rapide de Flask) ===
     from src.downloader import VideoDownloader
-    from src.viral_detector import ViralMoment, ViralMomentDetector
+    from src.viral_detector import ViralMoment, ViralMomentDetector, ContentType
     from src.clip_generator import ClipGenerator, ClipConfig
     from src.subtitles import SubtitleGenerator
     from src.ai_analyzer import TranscriptSegment, analyze_with_ai
     from src.auto_config import AutoConfigurator, GeneratedConfig
     
     logger = LogCapture(job_id)
-    jobs[job_id] = {"status": "running", "clips": [], "error": None}
+    jobs[job_id] = {"status": "running", "clips": [], "error": None, "_created": time.time()}
     
     video_path = None
     is_downloaded = False
@@ -311,6 +344,11 @@ def process_video(job_id: str, url: str, options: dict):
                 logger.log("Paramètres par défaut utilisés", "info", "autoconfig", 100)
                 auto_generated_config = None
 
+        # Extraire le type de contenu détecté (pour adapter l'analyse)
+        detected_content_type = "unknown"
+        if auto_generated_config and auto_generated_config.detected_content_type:
+            detected_content_type = auto_generated_config.detected_content_type.lower()
+
         # === ÉTAPE 2: Analyse des moments viraux (25-50%) ===
         logger.log("Analyse des moments viraux...", "info", "analyze", 0)
 
@@ -354,7 +392,8 @@ def process_video(job_id: str, url: str, options: dict):
                         max_clips=max_clips or 5,  # Défaut réduit de 10 à 5
                         min_viral_score=min_score,  # Propager le seuil utilisateur
                         video_path=video_path,
-                        progress_callback=ai_progress_callback
+                        progress_callback=ai_progress_callback,
+                        content_type=detected_content_type  # Adapter l'analyse au type de contenu
                     )
 
                     logger.log(f"IA a retourné {len(ai_moments)} moments", "info", "analyze", 95)
@@ -386,11 +425,18 @@ def process_video(job_id: str, url: str, options: dict):
         if not moments:
             logger.log("Fallback: Analyse audio/vidéo...", "info", "analyze", 75)
             try:
+                # Convertir la string en enum ContentType
+                try:
+                    content_type_enum = ContentType(detected_content_type)
+                except ValueError:
+                    content_type_enum = ContentType.UNKNOWN
+                
                 detector = ViralMomentDetector(
                     min_clip_duration=min_duration,
                     max_clip_duration=max_duration,
                     min_viral_score=min_score,
-                    max_clips=max_clips
+                    max_clips=max_clips,
+                    content_type=content_type_enum  # Adapter l'analyse au type de contenu
                 )
                 moments = detector.analyze(video_path)
                 
@@ -403,9 +449,21 @@ def process_video(job_id: str, url: str, options: dict):
                 moments = []
 
         if not moments:
-            error_msg = f"Aucun moment viral détecté (score minimum: {min_score}, durée: {min_duration}-{max_duration}s). Essayez de réduire le score minimum."
-            logger.log(error_msg, "error", "error", 0)
-            jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg}
+            # Aucun moment trouvé - terminer gracieusement sans erreur
+            logger.log("Aucun moment viral détecté dans cette vidéo", "warning", "analyze", 100)
+            logger.log("La vidéo ne contient pas de moments suffisamment engageants pour créer des clips", "info", "complete", 100)
+            
+            # Nettoyer les fichiers temporaires (sauf si fichier uploadé par l'utilisateur)
+            if is_downloaded and video_path:
+                cleanup_residual_files(video_path, "output", keep_user_files=False)
+            
+            # Marquer le job comme terminé (pas d'erreur, juste 0 clips)
+            jobs[job_id] = {
+                "status": "completed",
+                "clips": [],
+                "message": "Aucun moment viral détecté. La vidéo ne contient pas de contenu suffisamment engageant pour créer des clips courts.",
+                "_created": time.time()
+            }
             logger.close()
             return
         
@@ -458,74 +516,96 @@ def process_video(job_id: str, url: str, options: dict):
         
         logger.log("Initialisation du générateur...", "info", "generate", 5)
         
-        # === MODE PARALLÈLE: Générer tous les clips en même temps ===
-        if config.parallel_processing and len(moments) > 1:
-            logger.log(
-                f"Traitement parallèle activé ({config.max_parallel_clips} clips simultanés)...",
-                "info", "generate", 10
-            )
-            
-            # Callback pour suivre la progression
-            def progress_callback(clip_num, total, message):
-                progress = 10 + int((clip_num / total) * 85)
-                logger.log(message, "info", "generate", progress)
-            
-            try:
-                # Générer tous les clips en parallèle
-                clips = generator.generate_clips(video_path, output_dir, moments, start_index=1)
-                
-                if clips:
-                    logger.log(
-                        f"{len(clips)} clips générés avec succès",
-                        "success", "generate", 95
-                    )
-            except Exception as e:
-                logger.log(f"Erreur génération: {e}", "warning", "generate", 95)
-                clips = []
+        # === HEARTBEAT THREAD pour maintenir la connexion pendant les opérations longues ===
+        import threading
+        heartbeat_stop = threading.Event()
         
-        else:
-            # === MODE SÉQUENTIEL: Générer les clips un par un pour le suivi ===
-            logger.log("Génération séquentielle...", "info", "generate", 10)
-            clips = []
-            for i, moment in enumerate(moments):
-                clip_num = i + 1
-                # Progression de 10% à 95% répartie entre les clips
-                progress_start = 10 + int((i / total_clips) * 85)
-                progress_end = 10 + int(((i + 1) / total_clips) * 85)
-
-                duration = moment.end_time - moment.start_time
+        def heartbeat_thread():
+            progress = 15
+            while not heartbeat_stop.is_set():
+                logger.heartbeat("generate", progress)
+                progress = min(progress + 2, 90)  # Augmente lentement jusqu'à 90%
+                heartbeat_stop.wait(10)  # Toutes les 10 secondes
+        
+        hb_thread = threading.Thread(target=heartbeat_thread, daemon=True)
+        hb_thread.start()
+        
+        try:
+            # === MODE PARALLÈLE: Générer tous les clips en même temps ===
+            if config.parallel_processing and len(moments) > 1:
                 logger.log(
-                    f"Clip {clip_num}/{total_clips}: extraction ({duration:.0f}s)...",
-                    "info", "generate", progress_start
+                    f"Traitement parallèle activé ({config.max_parallel_clips} clips simultanés)...",
+                    "info", "generate", 10
                 )
-
-                # Sous-étapes de progression
-                logger.log(
-                    f"Clip {clip_num}/{total_clips}: analyse des points de focus...",
-                    "info", "generate", progress_start + int((progress_end - progress_start) * 0.2)
-                )
-
-                # Générer ce clip
+                
+                # Callback pour suivre la progression
+                def progress_callback(clip_num, total, message):
+                    progress = 10 + int((clip_num / total) * 85)
+                    logger.log(message, "info", "generate", progress)
+                
                 try:
-                    logger.log(
-                        f"Clip {clip_num}/{total_clips}: encodage vidéo...",
-                        "info", "generate", progress_start + int((progress_end - progress_start) * 0.5)
-                    )
-
-                    clip_paths = generator.generate_clips(video_path, output_dir, [moment], start_index=clip_num)
-
-                    if clip_paths:
-                        clips.extend(clip_paths)
+                    # Générer tous les clips en parallèle
+                    clips = generator.generate_clips(video_path, output_dir, moments, start_index=1)
+                    
+                    if clips:
                         logger.log(
-                            f"Clip {clip_num}/{total_clips}: {Path(clip_paths[0]).name}",
-                            "success", "generate", progress_end
+                            f"{len(clips)} clips générés avec succès",
+                            "success", "generate", 95
                         )
                 except Exception as e:
-                    logger.log(f"Erreur clip {clip_num}: {e}", "warning", "generate", progress_end)
+                    logger.log(f"Erreur génération: {e}", "warning", "generate", 95)
+                    clips = []
+            
+            else:
+                # === MODE SÉQUENTIEL: Générer les clips un par un pour le suivi ===
+                logger.log("Génération séquentielle...", "info", "generate", 10)
+                clips = []
+                for i, moment in enumerate(moments):
+                    clip_num = i + 1
+                    # Progression de 10% à 95% répartie entre les clips
+                    progress_start = 10 + int((i / total_clips) * 85)
+                    progress_end = 10 + int(((i + 1) / total_clips) * 85)
+
+                    duration = moment.end_time - moment.start_time
+                    logger.log(
+                        f"Clip {clip_num}/{total_clips}: extraction ({duration:.0f}s)...",
+                        "info", "generate", progress_start
+                    )
+
+                    # Sous-étapes de progression
+                    logger.log(
+                        f"Clip {clip_num}/{total_clips}: analyse des points de focus...",
+                        "info", "generate", progress_start + int((progress_end - progress_start) * 0.2)
+                    )
+
+                    # Générer ce clip
+                    try:
+                        logger.log(
+                            f"Clip {clip_num}/{total_clips}: encodage vidéo...",
+                            "info", "generate", progress_start + int((progress_end - progress_start) * 0.5)
+                        )
+
+                        clip_paths = generator.generate_clips(video_path, output_dir, [moment], start_index=clip_num)
+
+                        if clip_paths:
+                            clips.extend(clip_paths)
+                            logger.log(
+                                f"Clip {clip_num}/{total_clips}: {Path(clip_paths[0]).name}",
+                                "success", "generate", progress_end
+                            )
+                    except Exception as e:
+                        logger.log(f"Erreur clip {clip_num}: {e}", "warning", "generate", progress_end)
+                        print(f"[ERREUR GÉNÉRATION] Clip {clip_num}: {e}")  # Log serveur
+                        import traceback
+                        traceback.print_exc()
+        finally:
+            # Arrêter le thread heartbeat
+            heartbeat_stop.set()
         
         if not clips:
             raise Exception("Aucun clip généré")
         
+        print(f"[GÉNÉRATION OK] {len(clips)} clips générés: {clips}")  # Log serveur
         logger.log(f"{len(clips)} clips générés avec succès", "success", "generate", 100)
         
         # === ÉTAPE 4: Sous-titres (maintenant intégrés dans la génération) ===
@@ -540,9 +620,8 @@ def process_video(job_id: str, url: str, options: dict):
         # pour éviter que le frontend fetch le status avant que clip_data soit prêt
         
         # === COPIE AUTOMATIQUE VERS DOSSIER TÉLÉCHARGEMENTS ===
-        # Détecter le dossier Téléchargements de l'utilisateur (défini ici pour être accessible plus loin)
-        from pathlib import Path as PathLib
-        home = PathLib.home()
+        # Détecter le dossier Téléchargements de l'utilisateur
+        home = Path.home()
         downloads_dir = home / "Downloads"
         
         try:
@@ -637,7 +716,7 @@ def process_video(job_id: str, url: str, options: dict):
         for i, clip in enumerate(clip_data):
             logger.log(f"  Clip {i+1}: {clip['url']} ({clip['size']} MB)", "info", "complete", 100)
         
-        jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None}
+        jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None, "_created": time.time()}
         
         # === TERMINÉ - Envoyer APRÈS mise à jour du job ===
         # Le frontend va fetch /api/status dès réception de ce message
@@ -656,7 +735,7 @@ def process_video(job_id: str, url: str, options: dict):
                     if clip_file.exists():
                         clip_file.unlink()
                         deleted_count += 1
-                except:
+                except Exception:
                     pass
             if deleted_count > 0:
                 logger.log(f"✓ {deleted_count} clips supprimés d'output/", "info", "complete", 100)
@@ -668,12 +747,12 @@ def process_video(job_id: str, url: str, options: dict):
             for f in Path('.').glob(pattern):
                 try:
                     f.unlink()
-                except:
+                except Exception:
                     pass
             for f in Path(output_dir).glob(pattern):
                 try:
                     f.unlink()
-                except:
+                except Exception:
                     pass
         
         # Nettoyer pycaps
@@ -682,26 +761,26 @@ def process_video(job_id: str, url: str, options: dict):
             try:
                 import shutil
                 shutil.rmtree(pycaps_dir, ignore_errors=True)
-            except:
+            except Exception:
                 pass
         
-        # === DÉSACTIVÉ: Ne plus supprimer la vidéo source après succès ===
-        # La vidéo pourrait être réutilisée pour d'autres clips
-        # is_user_file = options.get('is_user_file', False)
-        # if (is_downloaded or is_uploaded) and not is_user_file and video_path and os.path.exists(video_path):
-        #     try:
-        #         os.remove(video_path)
-        #         logger.log("Vidéo source nettoyée", "info", "complete", 100)
-        #     except:
-        #         pass
-        logger.log("Vidéo source préservée", "info", "complete", 100)
+        # === Supprimer la vidéo source YouTube après succès ===
+        # Uniquement pour les vidéos téléchargées, pas les fichiers importés
+        if is_downloaded and video_path and os.path.exists(video_path):
+            try:
+                os.remove(video_path)
+                logger.log("Vidéo YouTube supprimée", "info", "complete", 100)
+            except Exception:
+                pass
+        else:
+            logger.log("Vidéo source préservée", "info", "complete", 100)
         
     except Exception as e:
         import traceback
         error_msg = str(e)
         logger.log(f"ERREUR: {error_msg}", "error", "error", 0)
         logger.log(traceback.format_exc(), "error", "error", 0)
-        jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg}
+        jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg, "_created": time.time()}
     
     finally:
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
@@ -730,7 +809,8 @@ def start_process():
         return jsonify({"error": "URL YouTube invalide"}), 400
     
     # Générer un ID unique
-    job_id = f"job_{int(time.time() * 1000)}"
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
     
     # Options
     options = {
@@ -749,7 +829,7 @@ def start_process():
         'auto_config': data.get('auto_config', False),
         'auto_config_verbose': data.get('auto_config_verbose', False),
         'platform': data.get('platform', 'reels'),
-        'analysis_job_id': data.get('analysis_job_id'),  # ✨ Pour réutiliser la transcription
+        'analysis_job_id': data.get('analysis_job_id'),  # Pour réutiliser la transcription
         'local_file': video_path if video_path else None,  # Si vidéo déjà téléchargée
         'skip_download': data.get('skip_download', False),  # Flag pour skip download
     }
@@ -772,7 +852,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
     from moviepy import VideoFileClip
     
     logger = LogCapture(job_id)
-    jobs[job_id] = {"status": "running", "data": None, "error": None}
+    jobs[job_id] = {"status": "running", "data": None, "error": None, "_created": time.time()}
     
     video_path = None
     
@@ -866,7 +946,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             "video_path": video_path
         }
         
-        jobs[job_id] = {"status": "completed", "data": result_data, "error": None}
+        jobs[job_id] = {"status": "completed", "data": result_data, "error": None, "_created": time.time()}
         logger.log("Analyse terminée!", "success", "complete", 100)
         
         # === NETTOYAGE - DÉSACTIVÉ pour la vidéo source ===
@@ -883,7 +963,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
         traceback_str = traceback.format_exc()
         print(f"\n❌ ERREUR ANALYSE:\n{traceback_str}")
         logger.log(f"Erreur: {error_msg}", "error", "error", 0)
-        jobs[job_id] = {"status": "failed", "data": None, "error": error_msg}
+        jobs[job_id] = {"status": "failed", "data": None, "error": error_msg, "_created": time.time()}
     
     finally:
         # === NETTOYAGE FINAL (même en cas d'erreur) ===
@@ -921,7 +1001,8 @@ def start_process_local():
         return jsonify({"error": f"Format non supporté. Utilisez: {', '.join(allowed_extensions)}"}), 400
     
     # Générer un ID unique
-    job_id = f"job_{int(time.time() * 1000)}"
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
     
     # Options
     options = {
@@ -942,7 +1023,7 @@ def start_process_local():
         'platform': data.get('platform', 'reels'),
         'local_file': file_path,  # Chemin direct du fichier
         'is_user_file': True,  # Flag pour ne pas supprimer le fichier après traitement
-        'analysis_job_id': data.get('analysis_job_id'),  # ✨ Pour réutiliser la transcription de l'analyse
+        'analysis_job_id': data.get('analysis_job_id'),  # Pour réutiliser la transcription de l'analyse
     }
     
     # Lancer le traitement en arrière-plan
@@ -976,7 +1057,6 @@ def analyze_local():
         
         # Extraire premiers 180s de texte
         words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-        transcription_text = " ".join([w.word for w in words_180s])
         
         from moviepy import VideoFileClip
         with VideoFileClip(file_path) as video:
@@ -1039,7 +1119,6 @@ def analyze_youtube():
         
         # Extraire premiers 180s de texte
         words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-        transcription_text = " ".join([w.word for w in words_180s])
         
         from moviepy import VideoFileClip
         with VideoFileClip(video_path) as video:
@@ -1084,7 +1163,8 @@ def start_analyze_youtube():
         return jsonify({"error": "URL YouTube requise"}), 400
     
     # Générer un ID unique
-    job_id = f"analyze_{int(time.time() * 1000)}"
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
     
     # Lancer l'analyse en arrière-plan
     thread = threading.Thread(target=analyze_video, args=(job_id, url, False))
@@ -1107,7 +1187,8 @@ def start_analyze_local():
         return jsonify({"error": "Fichier introuvable"}), 400
     
     # Générer un ID unique
-    job_id = f"analyze_{int(time.time() * 1000)}"
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
     
     # Lancer l'analyse en arrière-plan
     thread = threading.Thread(target=analyze_video, args=(job_id, file_path, True))
@@ -1160,7 +1241,8 @@ def start_process_file():
     video_file.save(str(video_path))
     
     # Générer un ID unique
-    job_id = f"job_{timestamp}"
+    _cleanup_old_jobs()
+    job_id = str(uuid.uuid4())
     
     # Options depuis FormData
     options = {
@@ -1190,107 +1272,53 @@ def start_process_file():
     return jsonify({"job_id": job_id})
 
 
-@app.route('/api/stream/<job_id>')
-def stream_logs(job_id: str):
-    """Stream SSE des logs en temps réel avec support reconnexion"""
-    # Récupérer l'index de départ depuis le header (pour éviter les doublons)
-    last_index = request.args.get('from', 0, type=int)
+# === SOCKET.IO EVENT HANDLERS ===
 
-    def generate() -> Generator[str, None, None]:
-        nonlocal last_index
+@socketio.on('connect')
+def handle_connect():
+    """Gère la connexion d'un client WebSocket"""
+    print(f"[WebSocket] Client connecté: {request.sid}")
 
-        # Attendre que la queue soit créée ou vérifier si le job existe dans le buffer
-        timeout = 10
-        start = time.time()
-        while job_id not in log_queues and job_id not in log_buffers and time.time() - start < timeout:
-            time.sleep(0.1)
+@socketio.on('disconnect')
+def handle_disconnect():
+    """Gère la déconnexion d'un client WebSocket"""
+    print(f"[WebSocket] Client déconnecté: {request.sid}")
 
-        # Si le job n'existe pas du tout
-        if job_id not in log_queues and job_id not in log_buffers:
-            yield f"data: {json.dumps({'level': 'error', 'message': 'Job non trouvé'})}\n\n"
-            return
-
-        # Si le job existe dans le buffer (reconnexion après fermeture)
-        if job_id in log_buffers:
-            buffer = log_buffers[job_id]
-            # Envoyer les messages non encore reçus
-            for i, data in enumerate(buffer[last_index:], start=last_index):
-                yield f"data: {json.dumps(data)}\n\n"
-                last_index = i + 1
-
-            # Si le job est terminé, arrêter
-            if buffer and buffer[-1].get('step') in ['complete', 'error']:
-                return
-
-        # Si la queue n'existe plus (job terminé), arrêter
-        if job_id not in log_queues:
-            return
-
-        q = log_queues[job_id]
-
-        # Connection timeout: 10 minutes max (pour les longues vidéos)
-        connection_start = time.time()
-        max_connection_time = 600  # 10 minutes
+@socketio.on('join_job')
+def handle_join_job(data):
+    """Rejoint la room d'un job pour recevoir les mises à jour de progression"""
+    job_id = data.get('job_id')
+    if job_id:
+        join_room(job_id)
+        print(f"[WebSocket] Client {request.sid} a rejoint le job {job_id}")
         
-        # Heartbeat counter
-        heartbeat_count = 0
+        # Si le job existe déjà, envoyer l'historique des logs
+        if job_id in jobs:
+            job = jobs[job_id]
+            # Envoyer le statut actuel
+            emit('job_status', {
+                'job_id': job_id,
+                'status': job.get('status'),
+                'clips': job.get('clips', []),
+                'error': job.get('error')
+            })
 
-        while True:
-            try:
-                # Check connection timeout
-                if time.time() - connection_start > max_connection_time:
-                    yield f"data: {json.dumps({'level': 'info', 'message': 'Connection timeout - reconnect'})}\n\n"
-                    break
-
-                # Attendre un message avec timeout de 15 secondes
-                data = q.get(timeout=15)
-                
-                # Limit message size to prevent buffer overflow
-                message_str = json.dumps(data)
-                if len(message_str) > 8192:  # 8KB max per message
-                    data['message'] = data.get('message', '')[:1000] + '... (truncated)'
-                    message_str = json.dumps(data)
-                
-                yield f"data: {message_str}\n\n"
-
-                # Si c'est la fin, arrêter
-                if data.get('step') in ['complete', 'error']:
-                    break
-
-            except queue.Empty:
-                # Envoyer un heartbeat régulier (toutes les 15 secondes)
-                heartbeat_count += 1
-                yield f"data: {json.dumps({'level': 'heartbeat', 'count': heartbeat_count})}\n\n"
-
-    return Response(
-        generate(),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-            'Access-Control-Allow-Origin': '*'
-        }
-    )
+@socketio.on('leave_job')
+def handle_leave_job(data):
+    """Quitte la room d'un job"""
+    job_id = data.get('job_id')
+    if job_id:
+        leave_room(job_id)
+        print(f"[WebSocket] Client {request.sid} a quitté le job {job_id}")
 
 
 @app.route('/api/status/<job_id>')
 def get_status(job_id: str):
-    """Retourne le statut d'un job avec infos pour reconnexion"""
+    """Retourne le statut d'un job"""
     if job_id not in jobs:
         return jsonify({"error": "Job not found"}), 404
 
     result = dict(jobs[job_id])
-
-    # Ajouter les infos du buffer si disponibles
-    if job_id in log_buffers:
-        buffer = log_buffers[job_id]
-        result['log_count'] = len(buffer)
-        if buffer:
-            last_log = buffer[-1]
-            result['last_step'] = last_log.get('step')
-            result['last_progress'] = last_log.get('progress')
-
     return jsonify(result)
 
 
@@ -1368,6 +1396,15 @@ def serve_output(filename: str):
 @app.route('/clips/<path:filename>')
 def serve_clips(filename: str):
     """Sert les clips finaux depuis ~/Downloads (~/Téléchargements sur Mac FR)"""
+    # Validation du nom de fichier pour éviter les traversées de chemin
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return "Forbidden", 403
+    
+    # N'autoriser que les fichiers vidéo
+    if not filename.lower().endswith(('.mp4', '.webm', '.mov')):
+        return "Forbidden", 403
+    
     # Déterminer le dossier Downloads selon l'OS et la langue
     downloads_dir = Path.home() / 'Downloads'
     
@@ -1424,4 +1461,5 @@ if __name__ == '__main__':
     print("  http://localhost:5001")
     print("="*50 + "\n")
     
-    app.run(debug=True, host='0.0.0.0', port=5001, threaded=True)
+    # Utiliser socketio.run() pour supporter WebSocket
+    socketio.run(app, debug=True, host='127.0.0.1', port=5001)

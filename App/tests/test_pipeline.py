@@ -37,6 +37,28 @@ except ImportError:
             text = re.sub(r'\[.*?\]', '', str(text))
             print(text)
     console = FakeConsole()
+    
+    # Fake Panel pour le fallback
+    class Panel:
+        def __init__(self, text, **kwargs):
+            self.text = text
+        def __str__(self):
+            return str(self.text)
+    
+    # Fake Table pour le fallback
+    class Table:
+        def __init__(self, **kwargs):
+            self.rows = []
+            self.columns = []
+        def add_column(self, name, **kwargs):
+            self.columns.append(name)
+        def add_row(self, *args, **kwargs):
+            self.rows.append(args)
+        def __str__(self):
+            lines = [" | ".join(self.columns)]
+            for row in self.rows:
+                lines.append(" | ".join(str(c) for c in row))
+            return "\n".join(lines)
 
 
 @dataclass

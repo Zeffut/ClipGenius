@@ -4,7 +4,7 @@ Application native 100% locale qui transforme automatiquement des vidéos YouTub
 
 ## 🎯 Fonctionnalités
 
-- **🤖 Analyse IA des moments viraux** : GPT-4o-mini ou Phi-4-mini local (100% offline)
+- **🤖 Analyse IA des moments viraux** : Phi-4-mini local (100% offline)
 - **🎨 4 Presets intelligents** : Podcast, Gaming, Vlog, Tutoriel (détection automatique)
 - **🎬 Recadrage intelligent** : Détection de visages MediaPipe + blur-fill élégant
 - **📝 Sous-titres animés** : Style TikTok avec emojis et animations
@@ -65,15 +65,8 @@ choco install ffmpeg
 
 ### 5. Configuration (optionnel)
 
-Pour utiliser l'analyse IA cloud (GPT-4o-mini):
-
-```bash
-cd App
-cp .env.example .env
-# Éditer .env et ajouter: OPENAI_API_KEY=sk-votre-cle
-```
-
-**Sans clé API** : ClipGenius utilisera Phi-4-mini en local (100% offline).
+L'application fonctionne 100% en local sans configuration requise.
+Le modèle Phi-4-mini sera téléchargé automatiquement au premier lancement.
 
 ## ▶️ Utilisation
 
@@ -132,7 +125,7 @@ ClipGenius/
 │   │
 │   ├── src/                     # Modules Python
 │   │   ├── downloader.py           # yt-dlp YouTube downloader
-│   │   ├── ai_analyzer.py          # Analyse IA (GPT-4o-mini)
+│   │   ├── ai_analyzer.py          # Analyse IA locale (Phi-4-mini)
 │   │   ├── local_llm.py            # Phi-4-mini local (offline)
 │   │   ├── viral_detector.py       # Détection audio/video (fallback)
 │   │   ├── smart_cropper.py        # MediaPipe face detection
@@ -168,11 +161,8 @@ ClipGenius/
 ### Variables d'environnement (.env)
 
 ```bash
-# Analyse IA cloud (optionnel)
-OPENAI_API_KEY=sk-xxx
-
-# Emojis dans sous-titres (optionnel)
-PYCAPS_OPENAI_API_KEY=sk-xxx
+# Aucune clé API requise - 100% offline
+# Voir .env.example pour les options avancées
 ```
 
 ### Modèles Whisper disponibles
@@ -288,7 +278,7 @@ MIT License - Utilisez librement pour projets personnels et commerciaux.
 
 ## 🙏 Remerciements
 
-- **OpenAI Whisper** - Transcription audio
+- **Whisper** - Transcription audio (local)
 - **MediaPipe** - Détection de visages
 - **yt-dlp** - Téléchargement YouTube
 - **MoviePy** - Traitement vidéo

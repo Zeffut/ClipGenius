@@ -1,36 +1,25 @@
 # AGENTS.md
 
-This file provides guidance to coding agents working on the ClipGenius repository.
+Guidance for AI coding agents working on ClipGenius - a viral clip generator.
 
 ## Project Overview
 
-ClipGenius beta is a viral clip generator that transforms YouTube videos or local files into vertical 9:16 clips optimized for TikTok, Instagram Reels, and YouTube Shorts. It uses AI analysis (GPT-4o-mini or local Phi-4-mini), Whisper transcription, MediaPipe face detection, and advanced audio/video processing.
+ClipGenius transforms YouTube/local videos into vertical 9:16 clips for TikTok, Instagram Reels, and YouTube Shorts. 100% offline - uses Phi-4-mini for AI analysis, Whisper for transcription, MediaPipe for face detection.
 
-**Tech Stack:** Python 3.9+, MoviePy, OpenCV, MediaPipe, Whisper, FFmpeg, Click, Rich
+**Stack:** Python 3.10+, MoviePy, OpenCV, MediaPipe, Whisper, FFmpeg, Click, Rich, Flask
 
 ## Build & Run Commands
 
-### Installation
 ```bash
 cd App
 
-# Install dependencies (requires Python 3.9+, FFmpeg in PATH)
+# Install (requires Python 3.10+, FFmpeg in PATH)
 pip install -r requirements.txt
 
-# Install with virtual environment (recommended)
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Running the Application
-```bash
-cd App
-
-# Launch the application (PyWebView native window)
+# Run application (PyWebView native window)
 python app.py
 
-# Or run Flask server only (for development)
+# Run Flask dev server only
 python web_app.py
 ```
 
@@ -45,56 +34,42 @@ python tests/test_pipeline.py
 # Quick test (imports only)
 python tests/test_pipeline.py --quick
 
-# Test with specific video file
-python tests/test_pipeline.py --with-video path/to/video.mp4
-
-# Run individual test files
+# Run single test file
 python tests/test_import.py
 python tests/test_local_llm.py
+python tests/test_subtitles.py
 python tests/test_visual.py
+python tests/test_server.py
 ```
 
-**Note:** This project uses custom test scripts (not pytest/unittest). Tests are located in:
-- `App/tests/test_pipeline.py` - Main pipeline integration tests
-- `App/tests/test_*.py` - Individual component tests
+**Note:** Uses custom test scripts (not pytest). Tests return exit code 0 on success, 1 on failure.
 
-### Development Server
-```bash
-cd App
+## Code Style
 
-# Flask dev server (for web interface testing)
-python web_app.py
-```
-
-## Code Style & Conventions
-
-### Language & Documentation
-- **Primary Language:** Python 3.9+
+### Language Convention
+- **Code/Variables:** English, snake_case
 - **Docstrings/Comments:** French (e.g., "Analyse les moments viraux")
-- **Variable Names:** English, snake_case (e.g., `video_duration`, `min_score`)
 
-### Naming Conventions
+### Naming
 ```python
-# Functions and variables: snake_case
+# Functions/variables: snake_case
 def analyze_viral_moments(video_path: str) -> List[ViralMoment]:
     min_duration = 30.0
-    
+
 # Classes: PascalCase
 class SmartCropper:
     pass
 
 # Constants: UPPER_SNAKE_CASE
 MAX_CLIP_DURATION = 90.0
-PLATFORM_SPECS = {...}
 
-# Private methods/attributes: leading underscore
+# Private: leading underscore
 def _internal_helper(self):
     self._cache = {}
 ```
 
-### Type Hints & Imports
+### Type Hints (Required)
 ```python
-# Always use type hints
 from typing import List, Optional, Dict, Tuple, Any
 from dataclasses import dataclass
 
@@ -104,7 +79,6 @@ def process_clips(
 ) -> Optional[List[str]]:
     pass
 
-# Dataclasses for data structures
 @dataclass
 class ViralMoment:
     start_time: float
@@ -113,7 +87,7 @@ class ViralMoment:
     reason: str
 ```
 
-### Import Organization
+### Import Order
 ```python
 # 1. Standard library
 import os
@@ -121,7 +95,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-# 2. Third-party libraries
+# 2. Third-party
 import click
 import numpy as np
 from rich.console import Console
@@ -132,18 +106,16 @@ from .viral_detector import ViralMomentDetector
 from .smart_cropper import SmartCropper
 ```
 
-### Formatting & Structure
-- **Line Length:** No strict limit, but prefer <100 chars for readability
+### Formatting
 - **Indentation:** 4 spaces
-- **String Quotes:** Single quotes `'` for strings, double quotes `"` for user-facing messages
-- **CLI Framework:** Use `click` decorators for CLI arguments
-- **Console Output:** Use `rich.console.Console()` for formatted output
+- **Line length:** Prefer <100 chars
+- **Quotes:** Single `'` for internal strings, double `"` for user-facing messages
+- **CLI:** Use `click` decorators
+- **Console output:** Use `rich.console.Console()`
 
 ### Error Handling & Resource Management
 ```python
-# Always use try/finally for video resources
-from moviepy import VideoFileClip
-
+# CRITICAL: Always use try/finally for VideoFileClip to prevent file locks
 video = None
 try:
     video = VideoFileClip(video_path)
@@ -152,14 +124,9 @@ finally:
     if video:
         video.close()
     gc.collect()  # Force garbage collection for MoviePy
-
-# Handle missing API keys gracefully with fallbacks
-if not openai_key:
-    console.print("[yellow]⚠ OpenAI key missing, using fallback[/yellow]")
-    # Fallback to audio/video energy analysis
 ```
 
-### Configuration & Dataclasses
+### Configuration Pattern
 ```python
 from dataclasses import dataclass
 
@@ -173,145 +140,47 @@ class ClipConfig:
     smart_crop: bool = True
 ```
 
-## Architecture & Module Organization
+## Architecture
 
-### Directory Structure
 ```
-ClipGenius/
-├── App/                      # Application principale
-│   ├── app.py                    # Entry point (PyWebView)
-│   ├── web_app.py                # Flask server
-│   ├── build_mac.py              # macOS build script
-│   ├── requirements.txt          # Dependencies
-│   ├── src/                      # Source modules
-│   │   ├── downloader.py             # yt-dlp video downloader
-│   │   ├── viral_detector.py         # Audio/video energy analysis (fallback)
-│   │   ├── ai_analyzer.py            # GPT-4o-mini/Phi-4-mini content analysis
-│   │   ├── local_llm.py              # Local Phi-4-mini via llama.cpp
-│   │   ├── smart_cropper.py          # MediaPipe face detection + blur-fill
-│   │   ├── clip_generator.py         # Main video processing pipeline
-│   │   ├── subtitles.py              # Whisper transcription
-│   │   ├── enriched_subtitles.py     # TikTok-style animated captions
-│   │   ├── hook_optimizer.py         # First 3 seconds optimization
-│   │   ├── advanced_audio_analyzer.py # Emotion/event detection
-│   │   ├── adaptive_duration.py      # Platform-specific duration
-│   │   ├── thumbnail_generator.py    # Thumbnail creation
-│   │   ├── audio_overlay.py          # Background music
-│   │   ├── auto_config.py            # Intelligent auto-configuration
-│   │   └── presets.py                # Visual/subtitle presets
-│   ├── tests/                    # Test files
-│   ├── web/                      # Frontend templates
-│   ├── models/                   # AI models (gitignored)
-│   ├── downloads/                # Downloaded videos (gitignored)
-│   ├── uploads/                  # Uploaded files (gitignored)
-│   └── output/                   # Generated clips (gitignored)
-├── Site/                     # Website (coming soon)
-├── AGENTS.md                 # This file
-├── README.md                 # Documentation
-├── CHANGELOG.md              # Version history
-└── STRUCTURE.md              # Technical details
+App/
+├── app.py                 # Entry point (PyWebView)
+├── web_app.py             # Flask server
+├── src/                   # Source modules
+│   ├── downloader.py          # yt-dlp video downloader
+│   ├── viral_detector.py      # Audio/video energy analysis (fallback)
+│   ├── ai_analyzer.py         # Phi-4-mini local analysis (100% offline)
+│   ├── local_llm.py           # Phi-4-mini via llama.cpp
+│   ├── smart_cropper.py       # MediaPipe face detection + blur-fill
+│   ├── clip_generator.py      # Main video processing pipeline
+│   ├── subtitles.py           # Whisper transcription (local)
+│   ├── enriched_subtitles.py  # TikTok-style animated captions
+│   ├── hook_optimizer.py      # First 3s optimization
+│   ├── adaptive_duration.py   # Platform-specific duration
+│   ├── presets.py             # Visual/subtitle presets
+│   └── ...
+├── tests/                 # Test files (custom framework)
+└── web/templates/         # Frontend HTML
 ```
-
-### Key Design Patterns
-
-1. **Dataclass-based Configuration:** Use `@dataclass` for all config objects
-2. **Fallback Mechanisms:** AI analysis → Audio energy peaks if no API key
-3. **Resource Cleanup:** Always use `try/finally` for VideoFileClip objects
-4. **Progress Display:** Use `rich.progress.Progress` for long operations
-5. **Automatic Clip Count:** Only moments above `min_score` threshold (no quota filling)
 
 ### Pipeline Flow
 ```
-Input → VideoDownloader → AIViralAnalyzer (or fallback) → HookOptimizer 
-  → SmartCropper → AdaptiveDurationManager → ClipGenerator 
-  → SubtitleGenerator → EnrichedSubtitleProcessor → Output
+Input -> VideoDownloader -> LocalAIViralAnalyzer (Phi-4-mini) -> HookOptimizer
+  -> SmartCropper -> AdaptiveDurationManager -> ClipGenerator
+  -> SubtitleGenerator -> EnrichedSubtitleProcessor -> Output
 ```
 
-## Working with the Codebase
+## Common Pitfalls
 
-### Adding New Features
+1. **MoviePy file locks:** Always `try/finally` with `video.close()` and `gc.collect()`
+2. **AAC audio errors:** Use `sanitize_audio()` from `clip_generator.py`
+3. **MediaPipe warnings:** Suppressed via `os.environ['GLOG_minloglevel']`
+4. **LLM model not found:** Download Phi-4-mini GGUF to `models/` folder
 
-1. **Create module in `src/`** with French docstrings
-2. **Use dataclasses** for configurations
-3. **Add CLI option** in `main.py` using `@click.option`
-4. **Handle errors gracefully** with fallbacks
-5. **Add tests** in `tests/` or `test_pipeline.py`
-6. **Update CLAUDE.md** if changing pipeline flow
+## Adding Features
 
-### Common Tasks
-
-**Add a new preset:**
-```python
-# Edit src/presets.py
-PRESETS["my_preset"] = ClipGeniusPreset(
-    name="my_preset",
-    description="My custom preset",
-    # ... configuration
-)
-```
-
-**Modify video effects:**
-```python
-# Edit src/clip_generator.py
-# Effects: zoom, blur-fill, color grading, sharpening, vignette, Ken Burns
-```
-
-**Change subtitle styling:**
-```python
-# Edit src/enriched_subtitles.py (word classification, colors)
-# Or src/subtitles.py (pycaps templates)
-```
-
-## Environment Variables
-
-```bash
-# .env file
-OPENAI_API_KEY=sk-...              # Optional, for AI analysis
-PYCAPS_OPENAI_API_KEY=sk-...       # Optional, for emoji generation
-```
-
-## Dependencies & External Tools
-
-**Required:**
-- FFmpeg (must be in PATH)
-- Python 3.9+
-
-**Key Python Packages:**
-- `moviepy>=2.0.0` - Video processing
-- `openai-whisper>=20231117` - Transcription
-- `mediapipe>=0.10.8` - Face detection
-- `yt-dlp>=2023.12.30` - YouTube downloading
-- `click>=8.1.0` - CLI framework
-- `rich>=13.0.0` - Console formatting
-
-**Optional:**
-- `openai>=1.0.0` - GPT-4o-mini analysis (fallback available)
-- `llama-cpp-python>=0.2.0` - Local Phi-4-mini (100% offline)
-
-## Common Pitfalls & Solutions
-
-1. **MoviePy file locks:** Always use `try/finally` and `gc.collect()`
-2. **AAC audio errors:** Use `sanitize_audio()` in `clip_generator.py`
-3. **MediaPipe warnings:** Already suppressed via `os.environ['GLOG_minloglevel']`
-4. **Windows encoding:** UTF-8 reconfiguration in `main.py:28-30`
-5. **Missing OpenAI key:** Automatic fallback to audio/video energy analysis
-
-## Testing Guidelines
-
-- Test files use custom framework (not pytest)
-- Run `python tests/test_pipeline.py` for full suite
-- Tests check: imports, hook analysis, subtitle enrichment, adaptive duration
-- Use `--quick` flag for fast import-only tests
-- Mock external dependencies when possible
-
-## Performance Considerations
-
-- GPU recommended for Whisper (faster transcription)
-- VideoToolbox acceleration on macOS (automatic)
-- Use `--no-smart-crop` to skip MediaPipe (faster, less accurate)
-- Use presets like `fast` for quick iterations
-- Temp files cleaned automatically unless `--keep-source`
-
----
-
-**For detailed pipeline documentation, see CLAUDE.md**
+1. Create module in `src/` with French docstrings
+2. Use `@dataclass` for configuration objects
+3. Add CLI option in `main.py` using `@click.option`
+4. Handle errors gracefully with fallbacks
+5. Add tests in `tests/`

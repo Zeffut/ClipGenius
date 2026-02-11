@@ -18,7 +18,7 @@ ClipGenius/
 │
 ├── 📁 src/                     # Code source (16 modules Python)
 │   ├── downloader.py          # YouTube downloader
-│   ├── ai_analyzer.py         # Analyse IA GPT-4o-mini
+│   ├── ai_analyzer.py         # Analyse IA locale Phi-4-mini
 │   ├── local_llm.py           # LLM local Phi-4-mini
 │   ├── viral_detector.py      # Fallback audio/video
 │   ├── smart_cropper.py       # MediaPipe face detection

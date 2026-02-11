@@ -860,7 +860,7 @@ def detect_content_type_with_llm(
         Tuple (ContentType final, confiance finale, raisonnement)
     """
     try:
-        from src.local_llm import LocalLLM
+        from .local_llm import LocalLLM
         
         # Prendre uniquement les premiers 500 mots pour limiter les tokens
         words = transcription_text.split()[:500]
@@ -912,14 +912,14 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
             prompt=prompt,
             max_tokens=100,
             temperature=0.1,  # Bas pour plus de déterminisme
-            stop=["\\n\\n", "TYPE:", "CONFIANCE:", "RAISON:"]
+            stop=["\n\n", "TYPE:", "CONFIANCE:", "RAISON:"]
         )
         
         # Extraire le texte de la réponse
         response = llm_response.text
         
         # Parser la réponse
-        lines = response.strip().split('\\n')
+        lines = response.strip().split('\n')
         detected_type = audio_based_type  # Fallback
         confidence = audio_confidence
         reasoning = f"Détection audio: {audio_based_type.value}"
@@ -946,7 +946,7 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
                 try:
                     conf_str = line.replace('CONFIANCE:', '').strip().replace('%', '')
                     confidence = float(conf_str) / 100.0
-                except:
+                except Exception:
                     pass
             
             elif line.startswith('RAISON:'):
@@ -1042,7 +1042,7 @@ class AutoConfigurator:
                 if video.audio:
                     # Extraire seulement la portion nécessaire
                     duration_to_extract = min(self.max_analysis_duration, video.duration)
-                    video.with_subclip(0, duration_to_extract).audio.write_audiofile(
+                    video.subclipped(0, duration_to_extract).audio.write_audiofile(
                         str(audio_path),
                         fps=11025,  # Sample rate réduit pour rapidité
                         logger=None

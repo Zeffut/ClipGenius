@@ -258,8 +258,8 @@ class HookOptimizer:
             # Détecter les débuts de phrase potentiels
             is_sentence_start = (
                 i == 0 or  # Premier mot
-                word_text[0].isupper() if word_text else False or  # Majuscule
-                any(window_words[i-1].get('word', '').endswith(p) for p in '.!?') if i > 0 else False
+                (word_text[0].isupper() if word_text else False) or  # Majuscule
+                (any(window_words[i-1].get('word', '').endswith(p) for p in '.!?') if i > 0 else False)
             )
             
             if is_sentence_start:
@@ -310,6 +310,18 @@ class HookOptimizer:
         """
         results = []
         
+        # Convertir les mots au bon format si nécessaire (une seule fois)
+        formatted_words = []
+        for w in words:
+            if hasattr(w, 'word'):
+                formatted_words.append({
+                    'word': w.word,
+                    'start': w.start,
+                    'end': w.end
+                })
+            else:
+                formatted_words.append(w)
+        
         for moment in moments:
             # Gérer les deux cas: objet ViralMoment ou dictionnaire
             if hasattr(moment, 'start_time'):
@@ -321,18 +333,6 @@ class HookOptimizer:
             else:
                 start = 0
                 end = 0
-            
-            # Convertir les mots au bon format si nécessaire
-            formatted_words = []
-            for w in words:
-                if hasattr(w, 'word'):
-                    formatted_words.append({
-                        'word': w.word,
-                        'start': w.start,
-                        'end': w.end
-                    })
-                else:
-                    formatted_words.append(w)
             
             new_start, analysis = self.find_better_hook(
                 formatted_words, start, end, min_clip_duration

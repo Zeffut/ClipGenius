@@ -110,7 +110,7 @@ class AudioOverlay:
             
             # Appliquer l'offset de début
             if start_offset > 0 and start_offset < music.duration:
-                music = music.with_subclip(start_offset)
+                music = music.subclipped(start_offset)
             
             # Boucler la musique si nécessaire
             if self.config.loop_music and music.duration < video_duration:
@@ -118,7 +118,7 @@ class AudioOverlay:
             
             # Couper la musique à la durée de la vidéo
             if music.duration > video_duration:
-                music = music.with_subclip(0, video_duration)
+                music = music.subclipped(0, video_duration)
             
             # Normaliser le volume si demandé
             if self.config.normalize_music:
@@ -183,12 +183,12 @@ class AudioOverlay:
         from moviepy import concatenate_audioclips
         
         loops_needed = int(np.ceil(target_duration / audio.duration))
-        clips = [audio] * loops_needed
+        clips = [audio.subclipped(0, audio.duration) for _ in range(loops_needed)]
         
         looped = concatenate_audioclips(clips)
         
         # Couper à la durée exacte
-        return looped.with_subclip(0, target_duration)
+        return looped.subclipped(0, target_duration)
     
     def _normalize_audio(self, audio: AudioFileClip) -> AudioFileClip:
         """Normalise le volume de l'audio."""
@@ -211,20 +211,14 @@ class AudioOverlay:
         return audio
     
     def _apply_fades(self, audio: AudioFileClip) -> AudioFileClip:
-        """Applique les fade-in et fade-out."""
-        duration = audio.duration
-        
+        """Applique les fade-in et fade-out via méthodes manuelles (MoviePy 2.x)."""
         # Fade-in
         if self.config.fade_in_duration > 0:
-            audio = audio.with_effects([
-                lambda clip: clip.audio_fadein(min(self.config.fade_in_duration, duration / 4))
-            ]) if hasattr(audio, 'audio_fadein') else self._manual_fade_in(audio)
+            audio = self._manual_fade_in(audio)
         
         # Fade-out
         if self.config.fade_out_duration > 0:
-            audio = audio.with_effects([
-                lambda clip: clip.audio_fadeout(min(self.config.fade_out_duration, duration / 4))
-            ]) if hasattr(audio, 'audio_fadeout') else self._manual_fade_out(audio)
+            audio = self._manual_fade_out(audio)
         
         return audio
     

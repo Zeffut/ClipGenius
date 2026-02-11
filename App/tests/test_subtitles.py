@@ -6,8 +6,8 @@ Test rapide du système de sous-titres ASS/pysubs2
 import sys
 from pathlib import Path
 
-# Ajouter le dossier src au path
-sys.path.insert(0, str(Path(__file__).parent))
+# Ajouter le dossier App au path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from rich.console import Console
 

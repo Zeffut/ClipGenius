@@ -1,13 +1,17 @@
 """
 Module de téléchargement de vidéos YouTube
 Utilise yt-dlp pour télécharger des vidéos de haute qualité
+Gère automatiquement le runtime deno pour contourner les restrictions YouTube
 """
 
 import os
+import time
 import yt_dlp
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 from rich.console import Console
+
+from .runtime_manager import get_runtime_manager, ensure_deno_available
 
 console = Console()
 
@@ -30,9 +34,13 @@ class VideoDownloader:
             'no_warnings': True,
             # Pas de format spécifique pour get_info (évite les erreurs de format)
             'skip_download': True,
-            # Options anti-blocage YouTube
+            # Utiliser android_vr pour contourner les restrictions SABR
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android_vr'],
+                }
+            },
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -85,19 +93,33 @@ class VideoDownloader:
         return hook
     
     def download(self, url: str, quality: str = "best", 
-                 progress_callback: Optional[ProgressCallback] = None) -> Optional[str]:
+                 progress_callback: Optional[ProgressCallback] = None,
+                 max_retries: int = 3) -> Optional[str]:
         """
-        Télécharge une vidéo YouTube
+        Télécharge une vidéo YouTube avec retry automatique en cas d'erreur réseau.
         
         Args:
             url: URL de la vidéo YouTube
             quality: Qualité souhaitée ('best', '1080p', '720p', '480p')
             progress_callback: Callback pour la progression (percent, message)
+            max_retries: Nombre maximum de tentatives (défaut: 3)
             
         Returns:
             Chemin vers le fichier téléchargé ou None si échec
         """
         self._progress_callback = progress_callback
+        
+        # S'assurer que deno est disponible pour YouTube (haute qualité)
+        runtime_manager = get_runtime_manager()
+        deno_path = runtime_manager.ensure_deno(progress_callback)
+        
+        if deno_path:
+            console.print(f"[green]Runtime deno disponible: {deno_path}[/green]")
+        else:
+            console.print("[yellow]deno non disponible, qualité peut être limitée[/yellow]")
+        
+        # Configurer l'environnement avec deno dans le PATH
+        env = runtime_manager.get_yt_dlp_env()
         
         # Configuration de la qualité
         format_spec = self._get_format_spec(quality)
@@ -113,70 +135,114 @@ class VideoDownloader:
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
             }],
-            'quiet': True,
-            'no_warnings': True,
+            'quiet': False,  # Afficher les messages pour debug
+            'no_warnings': False,
             'progress_hooks': [self._make_progress_hook()],
-            # Options anti-blocage YouTube (403 Forbidden)
+            # Utiliser android_vr pour contourner les restrictions SABR de YouTube
+            # Ce client n'a pas besoin de PO Token et offre tous les formats HD
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android_vr'],
+                }
+            },
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate',
             },
         }
         
+        # Sauvegarder le PATH original avant mutation
+        original_path = os.environ.get("PATH", "")
+        
+        # Mettre à jour l'environnement du processus pour yt-dlp
+        os.environ.update(env)
+        
+        last_error: Optional[Exception] = None
+        
         try:
-            if progress_callback:
-                progress_callback(5, "Connexion à YouTube...")
-            else:
-                console.print(f"[cyan]Téléchargement de la vidéo...[/cyan]")
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                if progress_callback:
-                    progress_callback(10, "Récupération des métadonnées...")
-                    
-                info = ydl.extract_info(url, download=True)
-                
-                # Trouver le fichier téléchargé
-                if info:
-                    filename = ydl.prepare_filename(info)
-                    # Assurer l'extension .mp4
-                    base = os.path.splitext(filename)[0]
-                    final_path = base + '.mp4'
-                    
-                    if os.path.exists(final_path):
-                        if progress_callback:
-                            progress_callback(100, f"Téléchargement terminé")
+            for attempt in range(1, max_retries + 1):
+                try:
+                    if progress_callback:
+                        if attempt > 1:
+                            progress_callback(5, f"Tentative {attempt}/{max_retries}...")
                         else:
-                            console.print(f"[green]Vidéo téléchargée: {final_path}[/green]")
-                        return final_path
-                    elif os.path.exists(filename):
-                        if progress_callback:
-                            progress_callback(100, f"Téléchargement terminé")
+                            progress_callback(5, "Connexion à YouTube...")
+                    else:
+                        if attempt > 1:
+                            console.print(f"[yellow]Tentative {attempt}/{max_retries}...[/yellow]")
                         else:
-                            console.print(f"[green]Vidéo téléchargée: {filename}[/green]")
-                        return filename
+                            console.print(f"[cyan]Téléchargement de la vidéo...[/cyan]")
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        if progress_callback:
+                            progress_callback(10, "Récupération des métadonnées...")
+                            
+                        info = ydl.extract_info(url, download=True)
                         
-        except Exception as e:
-            if progress_callback:
-                progress_callback(0, f"Erreur: {e}")
-            else:
-                console.print(f"[red]Erreur lors du téléchargement: {e}[/red]")
+                        # Trouver le fichier téléchargé
+                        if info:
+                            filename = ydl.prepare_filename(info)
+                            # Assurer l'extension .mp4
+                            base = os.path.splitext(filename)[0]
+                            final_path = base + '.mp4'
+                            
+                            if os.path.exists(final_path):
+                                if progress_callback:
+                                    progress_callback(100, f"Téléchargement terminé")
+                                else:
+                                    console.print(f"[green]Vidéo téléchargée: {final_path}[/green]")
+                                return final_path
+                            elif os.path.exists(filename):
+                                if progress_callback:
+                                    progress_callback(100, f"Téléchargement terminé")
+                                else:
+                                    console.print(f"[green]Vidéo téléchargée: {filename}[/green]")
+                                return filename
+                    
+                    # Si on arrive ici, le téléchargement n'a rien produit
+                    last_error = Exception("Aucun fichier produit par yt-dlp")
+                            
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        # Délai progressif: 3s, 6s entre les tentatives
+                        delay = attempt * 3
+                        console.print(
+                            f"[yellow]Erreur: {e}[/yellow]\n"
+                            f"[yellow]Nouvelle tentative dans {delay}s...[/yellow]"
+                        )
+                        if progress_callback:
+                            progress_callback(0, f"Erreur réseau, retry dans {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        # Dernière tentative échouée
+                        if progress_callback:
+                            progress_callback(0, f"Erreur après {max_retries} tentatives: {e}")
+                        else:
+                            console.print(f"[red]Erreur après {max_retries} tentatives: {e}[/red]")
+            
             return None
+            
         finally:
             self._progress_callback = None
-            
-        return None
+            # Restaurer le PATH original pour éviter une mutation permanente
+            os.environ["PATH"] = original_path
     
     def _get_format_spec(self, quality: str) -> str:
-        """Retourne la spécification de format pour yt-dlp"""
+        """
+        Retourne la spécification de format pour yt-dlp
+        Privilégie H.264 (avc1) pour un meilleur bitrate et compatibilité
+        """
+        # Préférer H.264 (avc1) car il a généralement un bitrate plus élevé que AV1/VP9
+        # Format: meilleur H.264 vidéo + meilleur audio, sinon meilleur disponible
         quality_map = {
-            'best': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            '1080p': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]',
-            '720p': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]',
-            '480p': 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]',
+            # Préférer avc1 (H.264) pour meilleur bitrate, puis vp9, puis av01
+            'best': 'bv[vcodec^=avc1]+ba/bv[vcodec^=vp9]+ba/bv+ba/b',
+            '1080p': 'bv[height<=1080][vcodec^=avc1]+ba/bv[height<=1080][vcodec^=vp9]+ba/bv[height<=1080]+ba/b',
+            '720p': 'bv[height<=720][vcodec^=avc1]+ba/bv[height<=720][vcodec^=vp9]+ba/bv[height<=720]+ba/b',
+            '480p': 'bv[height<=480][vcodec^=avc1]+ba/bv[height<=480][vcodec^=vp9]+ba/bv[height<=480]+ba/b',
         }
         return quality_map.get(quality, quality_map['best'])
 

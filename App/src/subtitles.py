@@ -33,10 +33,7 @@ if IS_APPLE_SILICON:
     except ImportError:
         console.print("[dim]mlx-whisper non installé - pip install mlx-whisper pour accélérer sur Mac[/dim]")
 
-# Configurer la clé OpenAI pour pycaps (émojis automatiques)
-# pycaps utilise PYCAPS_OPENAI_API_KEY, on la définit à partir de OPENAI_API_KEY si disponible
-if os.getenv("OPENAI_API_KEY") and not os.getenv("PYCAPS_OPENAI_API_KEY"):
-    os.environ["PYCAPS_OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+# Note: Les émojis sont générés localement via Phi-4-mini (100% offline)
 
 # Note: mlx_whisper utilise déjà un cache singleton interne (ModelHolder)
 # Le modèle n'est chargé qu'une fois et réutilisé automatiquement
@@ -44,75 +41,8 @@ if os.getenv("OPENAI_API_KEY") and not os.getenv("PYCAPS_OPENAI_API_KEY"):
 
 # =============================================================================
 # CUSTOM LLM PROVIDER - Émojis icônes uniquement (pas de visages)
+# Utilise uniquement le LLM local Phi-4-mini (100% offline)
 # =============================================================================
-
-class IconOnlyGpt:
-    """
-    LLM Provider personnalisé qui demande uniquement des émojis d'icônes.
-    Remplace le Gpt par défaut de pycaps pour éviter les émojis de visages.
-    """
-    
-    OPENAI_API_KEY_NAME = "PYCAPS_OPENAI_API_KEY"
-    
-    # Prompt système pour forcer les émojis d'icônes
-    SYSTEM_PROMPT = """You are an emoji selector for video subtitles. You MUST follow these rules strictly:
-
-FORBIDDEN EMOJI CATEGORIES (NEVER use these):
-- Face emojis (😀😃😄😁😆😅🤣😂🙂😊😇🥰😍🤩😘😗😚😋😛😜🤪😝🤑🤗🤭🤫🤔🤐🤨😐😑😶😏😒🙄😬🤥😌😔😪🤤😴😷🤒🤕🤢🤮🤧🥵🥶🥴😵🤯🤠🥳🥸😎🤓🧐😕😟🙁☹️😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬😈👿💀☠️💩🤡👹👺👻👽👾🤖😺😸😹😻😼😽🙀😿😾)
-- Hand gestures (👋🤚🖐️✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆🖕👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏✍️💅🤳💪)
-- Body parts and people
-
-ALLOWED EMOJI CATEGORIES (USE these):
-- Objects: 🎮🎯🎪🎨🎬🎤🎧🎵🎶🎹🥁🎸🎺🎻🎲🎰🎳⚽🏀🏈⚾🥎🎾🏐🏉🥏🎱🏓🏸🏒🏑🥍🏏⛳🪃🥅⛸️🎣🤿🎽🛹🛼🛷⛷️🏂🪂
-- Nature/Weather: 🌟⭐💫✨🔥💥💢💯🌈☀️🌤️⛅🌥️☁️🌧️⛈️🌩️🌨️❄️☃️⛄🌬️💨🌪️🌫️🌊💧💦
-- Technology: 💻🖥️🖨️⌨️🖱️💾💿📀📱📲☎️📞📟📠📺📻🎙️🎚️🎛️🧭⏱️⏲️⏰🕰️⌚📡🔋🔌💡🔦🕯️
-- Tools/Work: 🔧🔨⚒️🛠️⛏️🔩⚙️🗜️⛓️🔗🪝🧰🧲🪜💉🩸🩹🩺💊🧬🦠🧪🧫🔬🔭📡
-- Food: 🍕🍔🍟🌭🥪🌮🌯🫔🥙🧆🥚🍳🥘🍲🫕🥣🥗🍿🧈🧂🥫🍱🍘🍙🍚🍛🍜🍝🍠🍢🍣🍤🍥🥮🍡🥟🥠🥡🦀🦞🦐🦑🦪🍦🍧🍨🍩🍪🎂🍰🧁🥧🍫🍬🍭🍮🍯🍼🥛☕🫖🍵🍶🍾🍷🍸🍹🍺🍻🥂🥃🫗🥤🧋🧃🧉🧊
-- Symbols: ❤️🧡💛💚💙💜🖤🤍🤎💔❤️‍🔥💕💞💓💗💖💘💝💟☮️✝️☪️🕉️☸️✡️🔯🕎☯️☦️🛐⛎♈♉♊♋♌♍♎♏♐♑♒♓🆔⚛️🉑☢️☣️📴📳🈶🈚🈸🈺🈷️✴️🆚💮🉐㊙️㊗️🈴🈵🈹🈲🅰️🅱️🆎🆑🅾️🆘❌⭕🛑⛔📛🚫💯💢♨️🚷🚯🚳🚱🔞📵🚭❗❕❓❔‼️⁉️🔅🔆〽️⚠️🚸🔱⚜️🔰♻️✅🈯💹❇️✳️❎🌐💠Ⓜ️🌀💤🏧🚾♿🅿️🛗🈳🈂️🛂🛃🛄🛅🚹🚺🚼⚧🚻🚮🎦📶🈁🔣ℹ️🔤🔡🔠🆖🆗🆙🆒🆕🆓0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣🔟🔢#️⃣*️⃣⏏️▶️⏸️⏯️⏹️⏺️⏭️⏮️⏩⏪⏫⏬◀️🔼🔽➡️⬅️⬆️⬇️↗️↘️↙️↖️↕️↔️↪️↩️⤴️⤵️🔀🔁🔂🔄🔃🎵🎶➕➖➗✖️♾️💲💱™️©️®️👁️‍🗨️🔚🔙🔛🔝🔜〰️➰➿✔️☑️🔘🔴🟠🟡🟢🔵🟣⚫⚪🟤🔺🔻🔸🔹🔶🔷🔳🔲▪️▫️◾◽◼️◻️🟥🟧🟨🟩🟦🟪⬛⬜🟫🔈🔇🔉🔊🔔🔕📣📢
-- Animals: 🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐔🐧🐦🐤🦆🦅🦉🦇🐺🐗🐴🦄🐝🪱🐛🦋🐌🐞🐜🪰🪲🪳🦟🦗🕷️🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🐊🐅🐆🦓🦍🦧🦣🐘🦛🦏🐪🐫🦒🦘🦬🐃🐂🐄🐎🐖🐏🐑🦙🐐🦌🐕🐩🦮🐕‍🦺🐈🐈‍⬛🪶🐓🦃🦤🦚🦜🦢🦩🕊️🐇🦝🦨🦡🦫🦦🦥🐁🐀🐿️🦔🐾🐉🐲
-- Transport: 🚗🚕🚙🚌🚎🏎️🚓🚑🚒🚐🛻🚚🚛🚜🦯🦽🦼🛴🚲🛵🏍️🛺🚨🚔🚍🚘🚖🚡🚠🚟🚃🚋🚞🚝🚄🚅🚈🚂🚆🚇🚊🚉✈️🛫🛬🛩️💺🛰️🚀🛸🚁🛶⛵🚤🛥️🛳️⛴️🚢⚓🪝⛽🚧🚦🚥🚏🗺️🗿🗽🗼🏰🏯🏟️🎡🎢🎠⛲⛱️🏖️🏝️🏜️🌋⛰️🏔️🗻🏕️⛺🛖🏠🏡🏘️🏚️🏗️🏭🏢🏬🏣🏤🏥🏦🏨🏪🏫🏩💒🏛️⛪🕌🕍🛕🕋⛩️🛤️🛣️🗾🎑🏞️🌅🌄🌠🎇🎆🌇🌆🏙️🌃🌌🌉🌁
-- Weapons/Action: 🗡️⚔️🔪💣🪓🔫🏹🛡️🪚🔧🪛🔩⚙️🗜️⛓️🪝🧰🧲💎🪨🪵🔮🧿🪬🏺🔑🗝️🪤📿🧸🪆🖼️🪞🪟🛒
-- Awards/Success: 🏆🥇🥈🥉🏅🎖️🎗️🎫🎟️🎪🎭🎨🎬🎤🎧🎼🎹🥁🪘🎷🎺🎸🪕🎻🎲🎯🎳🎮🎰🧩
-
-RESPONSE FORMAT:
-- Respond with ONLY a single emoji, nothing else
-- If no appropriate icon emoji fits, respond with exactly "None"
-- NEVER use face or hand emojis under any circumstances"""
-
-    def __init__(self):
-        self._client = None
-
-    def send_message(self, prompt: str, model: str = "gpt-5-nano") -> str:
-        """Envoie un message à OpenAI avec notre prompt système personnalisé."""
-        client = self._get_client()
-
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            max_completion_tokens=10
-        )
-        return response.choices[0].message.content.strip()
-
-    def is_enabled(self) -> bool:
-        return os.getenv(self.OPENAI_API_KEY_NAME) is not None
-
-    def _get_client(self):
-        try:
-            from openai import OpenAI
-
-            if self._client:
-                return self._client
-
-            self._client = OpenAI(api_key=os.getenv(self.OPENAI_API_KEY_NAME))
-            return self._client
-        except ImportError:
-            raise ImportError(
-                "OpenAI API not found. "
-                "Please install it with: pip install openai"
-            )
 
 
 class IconOnlyLocalLLM:
@@ -169,28 +99,21 @@ If no emoji fits, respond with exactly "None"."""
 
 
 def _setup_custom_emoji_provider():
-    """Configure pycaps pour utiliser notre LLM personnalisé avec émojis icônes.
+    """Configure pycaps pour utiliser notre LLM local avec émojis icônes.
 
-    Essaie d'abord le LLM local (offline), puis fallback à l'API OpenAI.
+    Utilise uniquement le LLM local Phi-4-mini (100% offline).
     """
     try:
         from pycaps.ai import LlmProvider
 
-        # Essayer le LLM local d'abord
+        # Utiliser le LLM local uniquement (100% offline)
         local_provider = IconOnlyLocalLLM()
         if local_provider.is_enabled():
             LlmProvider.set(local_provider)
-            console.print("[dim]Provider émojis local (Phi-3-mini) activé[/dim]")
+            console.print("[dim]Provider émojis local (Phi-4-mini) activé[/dim]")
             return
 
-        # Fallback: API OpenAI
-        gpt_provider = IconOnlyGpt()
-        if gpt_provider.is_enabled():
-            LlmProvider.set(gpt_provider)
-            console.print("[dim]Provider émojis GPT activé[/dim]")
-            return
-
-        console.print("[yellow]Aucun provider emoji disponible[/yellow]")
+        console.print("[yellow]Provider emoji local non disponible[/yellow]")
 
     except ImportError:
         pass
@@ -630,10 +553,13 @@ class AnimatedSubtitleGenerator:
             # "Playwright Sync API inside asyncio loop" error
             thread = threading.Thread(target=run_pycaps_pipeline)
             thread.start()
-            thread.join()  # Attendre la fin du thread
+            thread.join(timeout=300)  # Timeout de 5 minutes
+            
+            if thread.is_alive():
+                console.print("[yellow]⚠ Timeout du thread pycaps (5min), la vidéo sera retournée sans sous-titres[/yellow]")
             
             # Vérifier si une erreur s'est produite dans le thread
-            if thread_error[0]:
+            if not thread.is_alive() and thread_error[0]:
                 raise thread_error[0]
             
             console.print(f"[green]Sous-titres animés ajoutés![/green]")
@@ -657,7 +583,7 @@ class AnimatedSubtitleGenerator:
             # Nettoyer le dossier temporaire
             try:
                 shutil.rmtree(temp_dir, ignore_errors=True)
-            except:
+            except Exception:
                 pass
 
 
@@ -794,14 +720,14 @@ class SubtitleGenerator:
         except Exception:
             pass
 
-        # Transcription 100% locale: MLX Whisper (Mac Apple Silicon) > OpenAI Whisper (standard)
+        # Transcription 100% locale: MLX Whisper (Mac Apple Silicon) > Whisper standard
         result = None
 
         # 1. MLX Whisper sur Mac Apple Silicon (rapide et local)
         if MLX_WHISPER_AVAILABLE:
             result = self._transcribe_with_mlx(video_path, video_duration, report_progress)
 
-        # 2. Fallback final: OpenAI Whisper standard (local)
+        # 2. Fallback final: Whisper standard (local)
 
         return result
 
@@ -936,7 +862,7 @@ class SubtitleGenerator:
         video_duration: Optional[float],
         report_progress: callable
     ) -> TranscriptionResult:
-        """Transcription avec OpenAI Whisper standard."""
+        """Transcription avec Whisper standard (modèle local)."""
         import torch
         import whisper
 

@@ -94,7 +94,6 @@ OPTIONS = {
         'mediapipe',
         'click',
         'rich',
-        'openai',
         'yt_dlp',
     ],
     'includes': [
