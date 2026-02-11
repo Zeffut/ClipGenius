@@ -74,7 +74,7 @@ def _setup_mediapipe_workaround():
                 if '__version__' in line:
                     try:
                         current_version = line.split('=')[1].strip().strip('"\'')
-                    except:
+                    except (IndexError, ValueError):
                         pass
                     break
 
@@ -86,7 +86,7 @@ def _setup_mediapipe_workaround():
             try:
                 if our_version_file.read_text().strip() == current_version:
                     need_copy = False
-            except:
+            except OSError:
                 pass
 
         if need_copy:

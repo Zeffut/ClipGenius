@@ -617,7 +617,7 @@ if __name__ == '__main__':
     #         try:
     #             video_file.unlink()
     #             print(f"  🗑️ Supprimé: {video_file.name}")
-    #         except:
+    #         except OSError:
     #             pass
     print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
 

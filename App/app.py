@@ -469,7 +469,7 @@ def run_main_app():
             try:
                 f.unlink()
                 print(f"  🗑️ Supprimé: output/{f.name}")
-            except:
+            except OSError:
                 pass
 
     # === DÉSACTIVÉ: Ne plus supprimer downloads/ au démarrage ===
@@ -480,7 +480,7 @@ def run_main_app():
     #         try:
     #             video_file.unlink()
     #             print(f"  🗑️ Supprimé: downloads/{video_file.name}")
-    #         except:
+    #         except OSError:
     #             pass
     print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
 
@@ -492,7 +492,7 @@ def run_main_app():
             import shutil
             shutil.rmtree(pycaps_dir, ignore_errors=True)
             print(f"  🗑️ Supprimé: {pycaps_dir.name}")
-        except:
+        except OSError:
             pass
 
     print("✅ Nettoyage terminé\n")
