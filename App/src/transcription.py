@@ -1,5 +1,8 @@
 """Transcription audio via Whisper (mlx-whisper ou openai-whisper)."""
 
+import io
+import re
+import sys
 import time
 import platform
 import threading
@@ -8,6 +11,26 @@ from dataclasses import dataclass
 from rich.console import Console
 
 console = Console()
+
+
+class TeeStderr:
+    """Wrapper stderr qui capture la sortie ET extrait la progression tqdm."""
+
+    def __init__(self, *streams):
+        self.streams = streams
+        self.progress = 0
+
+    def write(self, data):
+        for stream in self.streams:
+            stream.write(data)
+        # Extraire le pourcentage de tqdm (format: " 23%|███..." ou "100%|███...")
+        match = re.search(r'(\d+)%\|', data)
+        if match:
+            self.progress = int(match.group(1))
+
+    def flush(self):
+        for stream in self.streams:
+            stream.flush()
 
 # Détecter si on est sur Mac avec Apple Silicon
 IS_APPLE_SILICON = platform.system() == "Darwin" and platform.machine() == "arm64"
@@ -131,35 +154,18 @@ def transcribe_with_mlx(
     # On va capturer stderr pour extraire le pourcentage réel
     transcription_result = [None]
     transcription_error = [None]
-    current_whisper_progress = [0]  # Pourcentage réel de Whisper (0-100)
-
-    import sys
-    import io
-    import re
+    tee_wrapper = [None]  # Référence au TeeStderr pour lire la progression
 
     def run_transcription():
         try:
             # Capturer stderr où tqdm affiche la progression
             stderr_capture = io.StringIO()
 
-            # Créer un wrapper qui capture stderr ET l'affiche dans la console
-            class TeeStderr:
-                def __init__(self, *streams):
-                    self.streams = streams
-                def write(self, data):
-                    for stream in self.streams:
-                        stream.write(data)
-                    # Extraire le pourcentage de tqdm (format: " 23%|███..." ou "100%|███...")
-                    match = re.search(r'(\d+)%\|', data)
-                    if match:
-                        current_whisper_progress[0] = int(match.group(1))
-                def flush(self):
-                    for stream in self.streams:
-                        stream.flush()
-
             # Rediriger stderr vers notre wrapper
             old_stderr = sys.stderr
-            sys.stderr = TeeStderr(stderr_capture, old_stderr)
+            tee = TeeStderr(stderr_capture, old_stderr)
+            tee_wrapper[0] = tee
+            sys.stderr = tee
 
             try:
                 transcription_result[0] = mlx_whisper.transcribe(video_path, **transcribe_options)
@@ -177,7 +183,7 @@ def transcribe_with_mlx(
     first_progress_received = False
 
     while transcription_thread.is_alive():
-        whisper_pct = current_whisper_progress[0]
+        whisper_pct = tee_wrapper[0].progress if tee_wrapper[0] else 0
 
         # Envoyer directement le pourcentage Whisper (0-100)
         # Le mapping vers la plage globale sera fait par web_app.py
@@ -264,35 +270,18 @@ def transcribe_with_openai_whisper(
 
     transcription_result = [None]
     transcription_error = [None]
-    current_whisper_progress = [0]  # Pourcentage réel de Whisper (0-100)
-
-    import sys
-    import io
-    import re
+    tee_wrapper = [None]  # Référence au TeeStderr pour lire la progression
 
     def run_transcription():
         try:
             # Capturer stderr où tqdm affiche la progression
             stderr_capture = io.StringIO()
 
-            # Créer un wrapper qui capture stderr ET l'affiche dans la console
-            class TeeStderr:
-                def __init__(self, *streams):
-                    self.streams = streams
-                def write(self, data):
-                    for stream in self.streams:
-                        stream.write(data)
-                    # Extraire le pourcentage de tqdm (format: " 23%|███..." ou "100%|███...")
-                    match = re.search(r'(\d+)%\|', data)
-                    if match:
-                        current_whisper_progress[0] = int(match.group(1))
-                def flush(self):
-                    for stream in self.streams:
-                        stream.flush()
-
             # Rediriger stderr vers notre wrapper
             old_stderr = sys.stderr
-            sys.stderr = TeeStderr(stderr_capture, old_stderr)
+            tee = TeeStderr(stderr_capture, old_stderr)
+            tee_wrapper[0] = tee
+            sys.stderr = tee
 
             try:
                 transcription_result[0] = model.transcribe(video_path, **transcribe_options)
@@ -309,7 +298,7 @@ def transcribe_with_openai_whisper(
     last_reported_whisper_progress = 0
 
     while transcription_thread.is_alive():
-        whisper_pct = current_whisper_progress[0]
+        whisper_pct = tee_wrapper[0].progress if tee_wrapper[0] else 0
 
         # Mapper la progression Whisper (0-100%) vers la plage analyze (25-85%)
         analyze_progress = 25 + int(whisper_pct * 0.6)  # 0-100 -> 25-85

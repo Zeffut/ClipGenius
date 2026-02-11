@@ -564,6 +564,42 @@ class EnrichedSubtitleProcessor:
         return rules
 
 
+def _apply_custom_colors(style: 'SubtitleStyle', custom_colors: Dict[str, str]) -> None:
+    """Applique les couleurs/options personnalisées sur un SubtitleStyle.
+
+    Args:
+        style: Instance de SubtitleStyle à modifier en place
+        custom_colors: Dictionnaire de couleurs et options personnalisées
+    """
+    # Mapping direct: clé du dict -> attribut du style
+    _DIRECT_MAPPINGS = {
+        'primary_color': 'normal_color',
+        'keyword_color': 'keyword_color',
+        'number_color': 'number_color',
+        'emphasis_color': 'emphasis_color',
+        'highlight_color': 'highlight_color',
+        'base_font_size': 'base_font_size',
+        'keyword_size_multiplier': 'keyword_size_multiplier',
+        'font_family': 'font_family',
+        'text_transform': 'text_transform',
+    }
+
+    for key, attr in _DIRECT_MAPPINGS.items():
+        if key in custom_colors and custom_colors[key]:
+            setattr(style, attr, custom_colors[key])
+
+    # Champs booléens (vérifier is not None car False est une valeur valide)
+    _BOOL_MAPPINGS = {
+        'uppercase_keywords': 'uppercase_keywords',
+        'enable_animations': 'enable_animations',
+        'enable_3d_shadow': 'enable_3d_effect',
+    }
+
+    for key, attr in _BOOL_MAPPINGS.items():
+        if key in custom_colors and custom_colors[key] is not None:
+            setattr(style, attr, custom_colors[key])
+
+
 def create_enriched_subtitle_template(
     style: Optional[SubtitleStyle] = None,
     max_words: int = 3,
@@ -588,34 +624,11 @@ def create_enriched_subtitle_template(
 
     # Appliquer les couleurs personnalisées si fournies
     if custom_colors:
-        if 'primary_color' in custom_colors and custom_colors['primary_color']:
-            style.normal_color = custom_colors['primary_color']
-        if 'keyword_color' in custom_colors and custom_colors['keyword_color']:
-            style.keyword_color = custom_colors['keyword_color']
-        if 'number_color' in custom_colors and custom_colors['number_color']:
-            style.number_color = custom_colors['number_color']
-        if 'emphasis_color' in custom_colors and custom_colors['emphasis_color']:
-            style.emphasis_color = custom_colors['emphasis_color']
-        if 'highlight_color' in custom_colors and custom_colors['highlight_color']:
-            style.highlight_color = custom_colors['highlight_color']
-        if 'base_font_size' in custom_colors and custom_colors['base_font_size']:
-            style.base_font_size = custom_colors['base_font_size']
-        if 'keyword_size_multiplier' in custom_colors and custom_colors['keyword_size_multiplier']:
-            style.keyword_size_multiplier = custom_colors['keyword_size_multiplier']
-        if 'font_family' in custom_colors and custom_colors['font_family']:
-            style.font_family = custom_colors['font_family']
-        if 'text_transform' in custom_colors and custom_colors['text_transform']:
-            style.text_transform = custom_colors['text_transform']
-        if 'uppercase_keywords' in custom_colors and custom_colors['uppercase_keywords'] is not None:
-            style.uppercase_keywords = custom_colors['uppercase_keywords']
-        if 'enable_animations' in custom_colors and custom_colors['enable_animations'] is not None:
-            style.enable_animations = custom_colors['enable_animations']
+        _apply_custom_colors(style, custom_colors)
         if 'enable_glow' in custom_colors and custom_colors['enable_glow'] is not None:
             # Le glow affecte le thème
             if not custom_colors['enable_glow'] and style.theme in ['viral', 'neon', 'gaming']:
                 style.theme = 'minimal'
-        if 'enable_3d_shadow' in custom_colors and custom_colors['enable_3d_shadow'] is not None:
-            style.enable_3d_effect = custom_colors['enable_3d_shadow']
 
     processor = EnrichedSubtitleProcessor(style=style)
 
@@ -691,30 +704,7 @@ def get_enriched_css(style: Optional[SubtitleStyle] = None, custom_colors: Optio
 
     # Appliquer les couleurs personnalisées
     if custom_colors:
-        if 'primary_color' in custom_colors and custom_colors['primary_color']:
-            style.normal_color = custom_colors['primary_color']
-        if 'keyword_color' in custom_colors and custom_colors['keyword_color']:
-            style.keyword_color = custom_colors['keyword_color']
-        if 'number_color' in custom_colors and custom_colors['number_color']:
-            style.number_color = custom_colors['number_color']
-        if 'emphasis_color' in custom_colors and custom_colors['emphasis_color']:
-            style.emphasis_color = custom_colors['emphasis_color']
-        if 'highlight_color' in custom_colors and custom_colors['highlight_color']:
-            style.highlight_color = custom_colors['highlight_color']
-        if 'base_font_size' in custom_colors and custom_colors['base_font_size']:
-            style.base_font_size = custom_colors['base_font_size']
-        if 'keyword_size_multiplier' in custom_colors and custom_colors['keyword_size_multiplier']:
-            style.keyword_size_multiplier = custom_colors['keyword_size_multiplier']
-        if 'font_family' in custom_colors and custom_colors['font_family']:
-            style.font_family = custom_colors['font_family']
-        if 'text_transform' in custom_colors and custom_colors['text_transform']:
-            style.text_transform = custom_colors['text_transform']
-        if 'uppercase_keywords' in custom_colors and custom_colors['uppercase_keywords'] is not None:
-            style.uppercase_keywords = custom_colors['uppercase_keywords']
-        if 'enable_animations' in custom_colors and custom_colors['enable_animations'] is not None:
-            style.enable_animations = custom_colors['enable_animations']
-        if 'enable_3d_shadow' in custom_colors and custom_colors['enable_3d_shadow'] is not None:
-            style.enable_3d_effect = custom_colors['enable_3d_shadow']
+        _apply_custom_colors(style, custom_colors)
         if 'theme' in custom_colors and custom_colors['theme']:
             style.theme = custom_colors['theme']
 

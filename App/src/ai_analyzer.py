@@ -11,7 +11,6 @@ Il utilise le même format de prompt que Phi-3:
 import os
 import json
 import re
-import hashlib
 from typing import List, Optional, Callable, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +40,23 @@ LLM_SEGMENT_TEMPERATURE: float = 0.1
 MAX_LLM_RETRIES: int = 3
 HOOK_DISPLAY_MAX_LENGTH: int = 100
 SEGMENT_TEXT_MAX_LENGTH: int = 800
+
+
+def _create_progress_bar():
+    """Crée une barre de progression Rich standard pour l'analyse IA."""
+    from rich.progress import (
+        Progress, SpinnerColumn, TextColumn,
+        BarColumn, TaskProgressColumn, TimeRemainingColumn
+    )
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True
+    )
 
 
 class LocalAIViralAnalyzer:
@@ -134,20 +150,7 @@ class LocalAIViralAnalyzer:
 
         all_moments = []
 
-        from rich.progress import (
-            Progress, SpinnerColumn, TextColumn,
-            BarColumn, TaskProgressColumn, TimeRemainingColumn
-        )
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            console=console,
-            transient=True
-        ) as progress:
+        with _create_progress_bar() as progress:
             task = progress.add_task("Analyse par sections...", total=total_sections)
 
             for i, section in enumerate(sections):
@@ -394,20 +397,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         console.print(f"[dim]{total_to_analyze} segments à analyser[/dim]")
 
         moments = []
-        from rich.progress import (
-            Progress, SpinnerColumn, TextColumn,
-            BarColumn, TaskProgressColumn, TimeRemainingColumn
-        )
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            console=console,
-            transient=True
-        ) as progress:
+        with _create_progress_bar() as progress:
             task = progress.add_task("Analyse IA...", total=total_to_analyze)
 
             for i, seg in enumerate(combined_segments):

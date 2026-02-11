@@ -51,7 +51,6 @@ SOCKETIO_PING_TIMEOUT = 120          # 2 minutes avant timeout
 SOCKETIO_PING_INTERVAL = 25         # Ping toutes les 25 secondes
 SOCKETIO_MAX_BUFFER_MB = 10         # Taille max des messages HTTP en Mo
 HEARTBEAT_DEFAULT_PROGRESS = 50     # Progression par défaut du heartbeat
-DEFAULT_MAX_CLIPS = 5               # Nombre max de clips par défaut
 
 app = Flask(__name__, template_folder='web/templates')
 app.config['SECRET_KEY'] = os.urandom(24).hex()
@@ -123,6 +122,55 @@ class LogCapture:
         pass  # Buffer conservé pour reconnexion éventuelle
 
 
+def _build_options(source: dict, is_form: bool = False, **extra) -> dict:
+    """Construit le dict d'options commun à toutes les routes de traitement.
+
+    Args:
+        source: dict contenant les paramètres (request.json ou request.form)
+        is_form: True si source vient de request.form (valeurs string à convertir)
+        **extra: options supplémentaires à fusionner (local_file, is_user_file, etc.)
+
+    Returns:
+        Dict d'options prêt pour process_video()
+    """
+    def _get(key: str, default=None):
+        return source.get(key, default)
+
+    def _bool(key: str, default: bool = True) -> bool:
+        """Retourne un bool, avec conversion string si is_form."""
+        val = source.get(key)
+        if val is None:
+            return default
+        if is_form:
+            return str(val).lower() == 'true'
+        return val
+
+    def _int_or_none(key: str):
+        """Retourne int ou None si absent/vide."""
+        val = source.get(key)
+        return int(val) if val else None
+
+    options = {
+        'quality': _get('quality', '1080p'),
+        'min_score': float(_get('min_score', 0.80)),
+        'min_duration': float(_get('min_duration', 60)),
+        'max_duration': float(_get('max_duration', 90)),
+        'max_clips': _int_or_none('max_clips'),
+        'subtitles': _bool('subtitles', True),
+        'emojis': _bool('emojis', True),
+        'max_words': int(_get('max_words', 3)),
+        'whisper_model': _get('whisper_model', 'turbo'),
+        'use_ai': _bool('use_ai', True),
+        'language': _get('language', None),
+        'output_dir': 'output',
+        'auto_config': _bool('auto_config', False),
+        'auto_config_verbose': _bool('auto_config_verbose', False),
+        'platform': _get('platform', 'reels'),
+    }
+    options.update(extra)
+    return options
+
+
 @app.route('/')
 def index():
     """Page principale"""
@@ -148,26 +196,12 @@ def start_process():
     job_id = str(uuid.uuid4())
 
     # Options
-    options = {
-        'quality': data.get('quality', '1080p'),
-        'min_score': float(data.get('min_score', 0.80)),
-        'min_duration': float(data.get('min_duration', 60)),
-        'max_duration': float(data.get('max_duration', 90)),
-        'max_clips': int(data.get('max_clips')) if data.get('max_clips') else None,
-        'subtitles': data.get('subtitles', True),
-        'emojis': data.get('emojis', True),
-        'max_words': int(data.get('max_words', 3)),
-        'whisper_model': data.get('whisper_model', 'turbo'),
-        'use_ai': data.get('use_ai', True),
-        'language': data.get('language', None),
-        'output_dir': 'output',
-        'auto_config': data.get('auto_config', False),
-        'auto_config_verbose': data.get('auto_config_verbose', False),
-        'platform': data.get('platform', 'reels'),
-        'analysis_job_id': data.get('analysis_job_id'),  # Pour réutiliser la transcription
-        'local_file': video_path if video_path else None,  # Si vidéo déjà téléchargée
-        'skip_download': data.get('skip_download', False),  # Flag pour skip download
-    }
+    options = _build_options(
+        data,
+        analysis_job_id=data.get('analysis_job_id'),
+        local_file=video_path if video_path else None,
+        skip_download=data.get('skip_download', False),
+    )
 
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, url, options, jobs, _jobs_lock))
@@ -201,26 +235,12 @@ def start_process_local():
     job_id = str(uuid.uuid4())
 
     # Options
-    options = {
-        'quality': data.get('quality', '1080p'),
-        'min_score': float(data.get('min_score', 0.80)),
-        'min_duration': float(data.get('min_duration', 60)),
-        'max_duration': float(data.get('max_duration', 90)),
-        'max_clips': int(data.get('max_clips')) if data.get('max_clips') else None,
-        'subtitles': data.get('subtitles', True),
-        'emojis': data.get('emojis', True),
-        'max_words': int(data.get('max_words', 3)),
-        'whisper_model': data.get('whisper_model', 'turbo'),
-        'use_ai': data.get('use_ai', True),
-        'language': data.get('language', None),
-        'output_dir': 'output',
-        'auto_config': data.get('auto_config', False),
-        'auto_config_verbose': data.get('auto_config_verbose', False),
-        'platform': data.get('platform', 'reels'),
-        'local_file': file_path,  # Chemin direct du fichier
-        'is_user_file': True,  # Flag pour ne pas supprimer le fichier après traitement
-        'analysis_job_id': data.get('analysis_job_id'),  # Pour réutiliser la transcription de l'analyse
-    }
+    options = _build_options(
+        data,
+        local_file=file_path,
+        is_user_file=True,
+        analysis_job_id=data.get('analysis_job_id'),
+    )
 
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, None, options, jobs, _jobs_lock))
@@ -228,6 +248,55 @@ def start_process_local():
     thread.start()
 
     return jsonify({"job_id": job_id})
+
+
+def _run_analysis(video_path: str) -> dict:
+    """Exécute transcription + auto-config et retourne le résultat JSON.
+
+    Args:
+        video_path: Chemin vers la vidéo à analyser
+
+    Returns:
+        Dict JSON avec transcription, content_type, config, video_path
+    """
+    # === LAZY IMPORTS ===
+    from src.subtitles import SubtitleGenerator
+    from src.auto_config import AutoConfigurator
+
+    # 1. Transcription
+    subtitle_gen = SubtitleGenerator(model_size='base', language=None)
+    transcription_result = subtitle_gen.transcribe_with_words(video_path)
+
+    # 2. Auto-config avec transcription
+    configurator = AutoConfigurator()
+
+    from moviepy import VideoFileClip
+    with VideoFileClip(video_path) as video:
+        total_duration = video.duration
+
+    config, analysis = configurator.analyze_and_configure(
+        video_path,
+        platform='reels',
+        total_duration=total_duration,
+        transcription_result=transcription_result
+    )
+
+    return {
+        "success": True,
+        "transcription": {
+            "word_count": len(transcription_result.words),
+            "segment_count": len(transcription_result.segments)
+        },
+        "content_type": analysis.content_type.value,
+        "confidence": analysis.content_confidence,
+        "config": {
+            "min_duration": config.min_duration,
+            "max_duration": config.max_duration,
+            "color_grading": config.color_grading,
+            "zoom_style": config.zoom_style
+        },
+        "video_path": video_path
+    }
 
 
 @app.route('/api/analyze-local', methods=['POST'])
@@ -240,49 +309,7 @@ def analyze_local():
         return jsonify({"error": "Fichier introuvable"}), 400
 
     try:
-        # === LAZY IMPORTS ===
-        from src.subtitles import SubtitleGenerator
-        from src.auto_config import AutoConfigurator
-
-        # 1. Transcription
-        subtitle_gen = SubtitleGenerator(model_size='base', language=None)
-        transcription_result = subtitle_gen.transcribe_with_words(file_path)
-
-        # 2. Auto-config avec transcription
-        configurator = AutoConfigurator()
-
-        # Extraire premiers 180s de texte
-        words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-
-        from moviepy import VideoFileClip
-        with VideoFileClip(file_path) as video:
-            total_duration = video.duration
-
-        config, analysis = configurator.analyze_and_configure(
-            file_path,
-            platform='reels',
-            total_duration=total_duration,
-            transcription_result=transcription_result
-        )
-
-        # Retourner les résultats
-        return jsonify({
-            "success": True,
-            "transcription": {
-                "word_count": len(transcription_result.words),
-                "segment_count": len(transcription_result.segments)
-            },
-            "content_type": analysis.content_type.value,
-            "confidence": analysis.content_confidence,
-            "config": {
-                "min_duration": config.min_duration,
-                "max_duration": config.max_duration,
-                "color_grading": config.color_grading,
-                "zoom_style": config.zoom_style
-            },
-            "video_path": file_path
-        })
-
+        return jsonify(_run_analysis(file_path))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -297,54 +324,12 @@ def analyze_youtube():
         return jsonify({"error": "URL YouTube requise"}), 400
 
     try:
-        # === LAZY IMPORTS ===
+        # Télécharger d'abord
         from src.downloader import VideoDownloader
-        from src.subtitles import SubtitleGenerator
-        from src.auto_config import AutoConfigurator
-
-        # 1. Télécharger
         downloader = VideoDownloader()
         video_path = downloader.download(url, quality='1080p', output_dir='output')
 
-        # 2. Transcription
-        subtitle_gen = SubtitleGenerator(model_size='base', language=None)
-        transcription_result = subtitle_gen.transcribe_with_words(video_path)
-
-        # 3. Auto-config avec transcription
-        configurator = AutoConfigurator()
-
-        # Extraire premiers 180s de texte
-        words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-
-        from moviepy import VideoFileClip
-        with VideoFileClip(video_path) as video:
-            total_duration = video.duration
-
-        config, analysis = configurator.analyze_and_configure(
-            video_path,
-            platform='reels',
-            total_duration=total_duration,
-            transcription_result=transcription_result
-        )
-
-        # Retourner les résultats
-        return jsonify({
-            "success": True,
-            "transcription": {
-                "word_count": len(transcription_result.words),
-                "segment_count": len(transcription_result.segments)
-            },
-            "content_type": analysis.content_type.value,
-            "confidence": analysis.content_confidence,
-            "config": {
-                "min_duration": config.min_duration,
-                "max_duration": config.max_duration,
-                "color_grading": config.color_grading,
-                "zoom_style": config.zoom_style
-            },
-            "video_path": video_path
-        })
-
+        return jsonify(_run_analysis(video_path))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -441,24 +426,11 @@ def start_process_file():
     job_id = str(uuid.uuid4())
 
     # Options depuis FormData
-    options = {
-        'quality': request.form.get('quality', '1080p'),
-        'min_score': float(request.form.get('min_score', 0.80)),
-        'min_duration': float(request.form.get('min_duration', 60)),
-        'max_duration': float(request.form.get('max_duration', 90)),
-        'max_clips': int(request.form.get('max_clips')) if request.form.get('max_clips') else None,
-        'subtitles': request.form.get('subtitles', 'true').lower() == 'true',
-        'emojis': request.form.get('emojis', 'true').lower() == 'true',
-        'max_words': int(request.form.get('max_words', 3)),
-        'whisper_model': request.form.get('whisper_model', 'turbo'),
-        'use_ai': request.form.get('use_ai', 'true').lower() == 'true',
-        'language': request.form.get('language', None),
-        'output_dir': 'output',
-        'auto_config': request.form.get('auto_config', 'false').lower() == 'true',
-        'auto_config_verbose': request.form.get('auto_config_verbose', 'false').lower() == 'true',
-        'platform': request.form.get('platform', 'reels'),
-        'local_file': str(video_path),  # Chemin du fichier uploadé
-    }
+    options = _build_options(
+        request.form,
+        is_form=True,
+        local_file=str(video_path),
+    )
 
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, None, options, jobs, _jobs_lock))
@@ -559,6 +531,32 @@ def get_youtube_duration(video_id: str):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+_VIDEO_MIMETYPES = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mov': 'video/quicktime',
+}
+
+
+def _send_video_file(directory: Path, filename: str):
+    """Envoie un fichier vidéo avec le bon MIME type et les headers nécessaires.
+
+    Args:
+        directory: Répertoire contenant le fichier
+        filename: Nom du fichier
+
+    Returns:
+        Response Flask avec headers vidéo (Accept-Ranges, CORS)
+    """
+    ext = Path(filename).suffix.lower()
+    mimetype = _VIDEO_MIMETYPES.get(ext)
+
+    response = send_from_directory(directory, filename, mimetype=mimetype)
+    response.headers['Accept-Ranges'] = 'bytes'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
 @app.route('/output/<path:filename>')
 def serve_output(filename: str):
     """Sert les fichiers de sortie avec le bon type MIME pour les vidéos"""
@@ -572,20 +570,7 @@ def serve_output(filename: str):
     else:
         print(f"❌ [serve_output] Fichier INTROUVABLE: {filename} (chemin: {file_path})")
 
-    # Déterminer le type MIME
-    mimetype = None
-    if filename.lower().endswith('.mp4'):
-        mimetype = 'video/mp4'
-    elif filename.lower().endswith('.webm'):
-        mimetype = 'video/webm'
-    elif filename.lower().endswith('.mov'):
-        mimetype = 'video/quicktime'
-
-    # Envoyer le fichier avec support des range requests (nécessaire pour les vidéos)
-    response = send_from_directory(output_dir, filename, mimetype=mimetype)
-    response.headers['Accept-Ranges'] = 'bytes'
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    return response
+    return _send_video_file(output_dir, filename)
 
 
 @app.route('/clips/<path:filename>')
@@ -607,20 +592,7 @@ def serve_clips(filename: str):
     if not downloads_dir.exists():
         downloads_dir = Path.home() / 'Téléchargements'
 
-    # Déterminer le type MIME
-    mimetype = None
-    if filename.lower().endswith('.mp4'):
-        mimetype = 'video/mp4'
-    elif filename.lower().endswith('.webm'):
-        mimetype = 'video/webm'
-    elif filename.lower().endswith('.mov'):
-        mimetype = 'video/quicktime'
-
-    # Envoyer le fichier avec support des range requests (nécessaire pour les vidéos)
-    response = send_from_directory(downloads_dir, filename, mimetype=mimetype)
-    response.headers['Accept-Ranges'] = 'bytes'
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    return response
+    return _send_video_file(downloads_dir, filename)
 
 
 # Créer le dossier templates

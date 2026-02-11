@@ -15,10 +15,6 @@ from typing import Optional, List
 from cleanup import cleanup_residual_files
 
 
-# Constante locale (même valeur que dans web_app.py)
-DEFAULT_MAX_CLIPS = 5
-
-
 def process_video(job_id: str, url: str, options: dict, jobs: dict, jobs_lock: threading.Lock):
     """Traite une vidéo YouTube ou locale en arrière-plan"""
 
@@ -27,7 +23,7 @@ def process_video(job_id: str, url: str, options: dict, jobs: dict, jobs_lock: t
     from src.viral_detector import ViralMoment, ViralMomentDetector, ContentType
     from src.clip_generator import ClipGenerator, ClipConfig
     from src.subtitles import SubtitleGenerator
-    from src.ai_analyzer import TranscriptSegment, analyze_with_ai
+    from src.ai_analyzer import TranscriptSegment, analyze_with_ai, DEFAULT_MAX_CLIPS
     from src.auto_config import AutoConfigurator, GeneratedConfig
 
     # Import différé pour éviter les imports circulaires

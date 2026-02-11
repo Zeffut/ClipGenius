@@ -23,7 +23,7 @@ from .smart_cropper import (
 )
 from .visual_effects import apply_color_grading, apply_sharpening
 from .audio_sanitizer import sanitize_audio
-from .clip_encoder import encode_single_clip
+from .clip_encoder import encode_single_clip, IS_MACOS
 from .adaptive_analysis import analyze_adaptive_segments
 
 # Nouveau système de tracking (remplace l'ancien)
@@ -61,12 +61,6 @@ _cache_lock = threading.Lock()
 DEFAULT_OUTPUT_WIDTH: int = 1080            # Largeur de sortie par défaut (pixels)
 DEFAULT_OUTPUT_HEIGHT: int = 1920           # Hauteur de sortie par défaut (pixels, ratio 9:16)
 DEFAULT_OUTPUT_FPS: int = 30               # FPS de sortie par défaut
-
-
-import platform
-
-# Détecter si on est sur Mac pour l'accélération matérielle VideoToolbox
-IS_MACOS = platform.system() == "Darwin"
 
 
 @dataclass
