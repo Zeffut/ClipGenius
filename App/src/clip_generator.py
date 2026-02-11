@@ -6,18 +6,11 @@ Combine toutes les fonctionnalités pour créer des clips optimisés
 import os
 import gc
 import time
-import cv2
 import numpy as np
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
-from moviepy import (
-    VideoFileClip,
-    AudioFileClip,
-    TextClip,
-    CompositeVideoClip,
-    concatenate_videoclips
-)
+from moviepy import VideoFileClip
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,8 +21,10 @@ from .smart_cropper import (
     SmartCropper, FocusPoint, CropResult, create_blur_filled_frame,
     AdaptiveCropManager, ContentType
 )
-from .visual_effects import apply_zoom_effect, apply_color_grading, apply_sharpening, apply_vignette, apply_ken_burns_effect
+from .visual_effects import apply_color_grading, apply_sharpening
 from .audio_sanitizer import sanitize_audio
+from .clip_encoder import encode_single_clip
+from .adaptive_analysis import analyze_adaptive_segments
 
 # Nouveau système de tracking (remplace l'ancien)
 try:
@@ -120,7 +115,7 @@ class ClipConfig:
     subtitle_theme: str = "viral"               # Thème de base
     subtitle_max_words: int = 3                 # Mots par segment
     subtitle_use_emojis: bool = True            # Ajouter émojis
-    subtitle_custom_colors: Optional[Dict[str, Any]] = None  # Couleurs/styles du preset
+    subtitle_custom_colors: Optional[dict] = None  # Couleurs/styles du preset
 
     # Zoom effect pour plus de dynamisme (DÉSACTIVÉ: peut causer des saccades)
     enable_zoom_effect: bool = False
@@ -270,677 +265,356 @@ class ClipGenerator:
                 console.print(f"[dim]Limité à {self.config.max_clips} meilleurs clips[/dim]")
 
             # Analyser les points de focus si smart_crop activé
-            if self.config.smart_crop:
-                # En mode rapide: sample_rate plus bas (1 fps au lieu de 2)
-                sample_rate = 1 if self.config.fast_mode else 2
-
-                # === NOUVEAU TRACKER (plus fluide) ===
-                if self.focus_tracker is not None:
-                    console.print("[cyan]Analyse du contenu (nouveau tracker)...[/cyan]")
-                    segments = [(m.start_time, m.end_time) for m in moments]
-
-                    # Auto-détection du preset si "auto"
-                    if self.config.tracking_preset.lower() == 'auto':
-                        detected_preset, analysis = analyze_content_type(str(video_path_obj))
-                        old_tracker = self.focus_tracker
-                        self.focus_tracker = FocusTracker(preset=detected_preset)
-                        # Fermer l'ancien tracker pour libérer les ressources MediaPipe
-                        try:
-                            old_tracker.close()
-                        except Exception:
-                            pass
-                        console.print(
-                            f"[dim]Type détecté: {detected_preset.value}"
-                            f" (faces={analysis.get('has_face', False)},"
-                            f" motion={analysis.get('motion_level', 0):.2f})[/dim]"
-                        )
-
-                    # Analyser la vidéo avec le nouveau tracker
-                    new_focus_points = self.focus_tracker.analyze_video(
-                        str(video_path_obj),
-                        segments=segments,
-                        progress_callback=lambda p, m: console.print(f"[dim]{m}[/dim]") if p % 25 == 0 else None
-                    )
-
-                    # Convertir en format legacy (timestamp, FocusPoint)
-                    focus_points = [
-                        (fp.timestamp, FocusPoint(x=fp.x, y=fp.y, confidence=fp.confidence))
-                        for fp in new_focus_points
-                    ]
-                    console.print(f"[green]{len(focus_points)} points de focus analysés[/green]")
-
-                # === ANCIEN SYSTÈME (fallback) ===
-                elif self.adaptive_manager is not None:
-                    console.print("[cyan]Analyse adaptative du contenu (ancien système)...[/cyan]")
-                    focus_points = self._analyze_adaptive_segments(
-                        str(video_path_obj), moments, sample_rate=sample_rate
-                    )
-                else:
-                    # Mode classique: SmartCropper avec détection de visage
-                    segments = [(m.start_time, m.end_time) for m in moments]
-                    focus_points = self.cropper.analyze_video_segments(
-                        str(video_path_obj), segments, sample_rate=sample_rate
-                    )
-            else:
-                # Mode rapide: crop centré, pas d'analyse MediaPipe
-                console.print(f"[dim]Mode rapide: crop centré (--no-smart-crop)[/dim]")
-                focus_points = []
-
-            # Note: La transcription est maintenant faite PAR CLIP avec 'turbo' (plus rapide et plus précis)
-            # Au lieu de transcrire toute la vidéo avec 'base'
+            focus_points = self._analyze_focus_points(str(video_path_obj), moments)
 
             # Générer chaque clip (parallèle ou séquentiel)
-            generated_clips: List[str] = []
-
-            if self.config.parallel_processing and len(moments) > 1:
-                # === MODE PARALLÈLE (2-4x plus rapide) ===
-                console.print(
-                    f"[cyan]Génération parallèle de {len(moments)} clips"
-                    f" ({self.config.max_parallel_clips} en parallèle)...[/cyan]"
-                )
-
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                    console=console
-                ) as progress:
-                    task = progress.add_task("Génération des clips...", total=len(moments))
-
-                    # Fonction pour générer un clip (thread-safe)
-                    def generate_clip_task(args):
-                        i, moment = args
-                        clip_name = f"{video_path_obj.stem}_clip_{i:02d}.mp4"
-                        clip_path = output_dir_obj / clip_name
-
-                        # Chaque thread doit avoir sa propre instance VideoFileClip
-                        video_thread = None
-                        try:
-                            video_thread = VideoFileClip(actual_video_path)
-
-                            # Essayer jusqu'à 2 fois en mode parallèle
-                            for attempt in range(2):
-                                try:
-                                    self._generate_single_clip(
-                                        video=video_thread,
-                                        moment=moment,
-                                        focus_points=focus_points,
-                                        output_path=str(clip_path),
-                                        clip_number=i
-                                    )
-                                    return (i, str(clip_path), True, None)
-                                except Exception as e:
-                                    if attempt == 0:
-                                        time.sleep(1)
-                                        gc.collect()
-                                    else:
-                                        return (i, str(clip_path), False, str(e))
-
-                            # Si on arrive ici, c'est qu'il y a eu un problème
-                            return (i, str(clip_path), False, "Erreur inconnue")
-                        except Exception as e:
-                            # Erreur lors de l'ouverture de la vidéo
-                            return (i, str(clip_path), False, f"Erreur ouverture vidéo: {e}")
-                        finally:
-                            if video_thread:
-                                try:
-                                    video_thread.close()
-                                except Exception:
-                                    pass
-                            gc.collect()
-
-                    # Créer les tâches
-                    tasks = [(i, moment) for i, moment in enumerate(moments, start_index)]
-
-                    # Exécuter en parallèle avec ThreadPoolExecutor
-                    with ThreadPoolExecutor(max_workers=self.config.max_parallel_clips) as executor:
-                        futures = {executor.submit(generate_clip_task, task): task for task in tasks}
-
-                        for future in as_completed(futures):
-                            try:
-                                result = future.result()
-                                if result is None:
-                                    continue
-
-                                i, clip_path, success, error = result
-
-                                if success:
-                                    generated_clips.append(clip_path)
-                                    moment = [m for idx, m in enumerate(moments, start_index) if idx == i][0]
-                                    console.print(
-                                        f"  [green]OK[/green] Clip {i}:"
-                                        f" {moment.start_time:.1f}s - {moment.end_time:.1f}s"
-                                    )
-                                else:
-                                    console.print(f"  [red]X[/red] Erreur clip {i}: {error}")
-                            except Exception as e:
-                                console.print(f"  [red]X[/red] Erreur future: {e}")
-
-                            progress.update(task, advance=1)
-
-                    # Trier par ordre de génération
-                    generated_clips.sort()
-
-            else:
-                # === MODE SÉQUENTIEL (compatible, fallback) ===
-                console.print(f"[dim]Génération séquentielle de {len(moments)} clips...[/dim]")
-
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                    console=console
-                ) as progress:
-                    task = progress.add_task("Génération des clips...", total=len(moments))
-
-                    for i, moment in enumerate(moments, start_index):
-                        clip_name = f"{video_path_obj.stem}_clip_{i:02d}.mp4"
-                        clip_path = output_dir_obj / clip_name
-
-                        # Libérer la mémoire avant chaque clip pour éviter les problèmes FFmpeg
-                        gc.collect()
-
-                        # Essayer jusqu'à 3 fois en cas d'erreur FFmpeg
-                        max_retries = 3
-                        for attempt in range(max_retries):
-                            try:
-                                self._generate_single_clip(
-                                    video=video,
-                                    moment=moment,
-                                    focus_points=focus_points,
-                                    output_path=str(clip_path),
-                                    clip_number=i
-                                )
-                                generated_clips.append(str(clip_path))
-                                console.print(
-                                    f"  [green]OK[/green] Clip {i}:"
-                                    f" {moment.start_time:.1f}s - {moment.end_time:.1f}s"
-                                )
-                                break  # Succès, sortir de la boucle de retry
-                            except Exception as e:
-                                error_msg = str(e)
-                                # Libérer les ressources avant de réessayer
-                                gc.collect()
-
-                                if (attempt < max_retries - 1
-                                        and ("stdout" in error_msg
-                                             or "NoneType" in error_msg
-                                             or "Proc" in error_msg)):
-                                    # Erreur FFmpeg, réessayer avec délai croissant
-                                    wait_time = (attempt + 1) * 2  # 2s, 4s
-                                    console.print(
-                                        f"  [yellow]![/yellow] Clip {i}:"
-                                        f" Retry ({attempt + 1}/{max_retries})"
-                                        f" dans {wait_time}s..."
-                                    )
-                                    time.sleep(wait_time)
-                                else:
-                                    console.print(f"  [red]X[/red] Erreur clip {i}: {e}")
-                                    break
-
-                        progress.update(task, advance=1)
+            generated_clips = self._generate_all_clips(
+                video, moments, focus_points, actual_video_path,
+                video_path_obj, output_dir_obj, start_index
+            )
 
         finally:
-            # Cleanup des ressources vidéo (garanti même en cas d'exception)
-            if video is not None:
-                try:
-                    video.close()
-                except Exception:
-                    pass
-            try:
-                self.cropper.close()
-            except Exception:
-                pass
-            if self.adaptive_manager is not None:
-                try:
-                    self.adaptive_manager.close()
-                except Exception:
-                    pass
-            if self.focus_tracker is not None:
-                try:
-                    self.focus_tracker.close()
-                except Exception:
-                    pass
-
-            # Nettoyer le cache de frames
-            global _frame_cache
-            with _cache_lock:
-                _frame_cache.clear()
-            gc.collect()
-
-            # Nettoyer le fichier audio sanitisé temporaire
-            if sanitized_video_path and os.path.exists(sanitized_video_path):
-                try:
-                    os.remove(sanitized_video_path)
-                except Exception:
-                    pass
+            self._cleanup_resources(video, sanitized_video_path)
 
         console.print(f"\n[bold green]{len(generated_clips)} clips générés avec succès![/bold green]")
         return generated_clips
 
-    def _generate_single_clip(
-        self,
-        video: VideoFileClip,
-        moment: ViralMoment,
-        focus_points: List[Tuple[float, FocusPoint]],
-        output_path: str,
-        clip_number: int
-    ):
-        """
-        Génère un seul clip avec gestion robuste des ressources.
-
-        Pipeline complet:
-        1. Extraction du segment
-        2. Recadrage intelligent + effets frame-by-frame
-        3. Resize à la taille finale
-        4. Effet de zoom dynamique
-        5. Vignette (optionnel)
-        6. Encodage haute qualité
-        """
-        subclip = None
-        processed_clip = None
-
-        try:
-            # Extraire le segment
-            subclip = video.subclipped(moment.start_time, moment.end_time)
-
-            if subclip.duration is None or subclip.duration <= 0:
-                raise ValueError(f"Duree du subclip invalide: {subclip.duration}")
-
-            # Récupérer le FPS source pour le préserver
-            source_fps = subclip.fps if hasattr(subclip, 'fps') and subclip.fps else self.config.output_fps
-
-            # Appliquer le recadrage intelligent + effets frame par frame
-            def process_frame_func(get_frame, t):
-                frame = get_frame(t)
-                return self._process_frame(
-                    frame,
-                    t + moment.start_time,
-                    focus_points
-                )
-
-            processed_clip = subclip.transform(process_frame_func)
-
-            # Forcer le FPS pour éviter les saccades (IMPORTANT)
-            processed_clip = processed_clip.with_fps(source_fps)
-
-            # Redimensionner à la taille finale
-            processed_clip = processed_clip.resized(
-                (self.config.output_width, self.config.output_height)
-            )
-
-            # Appliquer l'effet de zoom si activé (sauf en mode rapide)
-            if self.config.enable_zoom_effect and not self.config.fast_mode:
-                processed_clip = apply_zoom_effect(processed_clip, self.config.zoom_factor, self.config.zoom_style, self.config.use_lanczos)
-
-            # Appliquer l'effet Ken Burns si activé (après zoom, avant vignette)
-            if self.config.enable_ken_burns and not self.config.fast_mode:
-                processed_clip = apply_ken_burns_effect(processed_clip, self.config.ken_burns_intensity, self.config.use_lanczos)
-
-            # Appliquer la vignette si activée (après resize pour meilleures perfs, sauf fast mode)
-            if self.config.enable_vignette and not self.config.fast_mode:
-                def vignette_effect(get_frame, t):
-                    frame = get_frame(t)
-                    return apply_vignette(frame, self.config.vignette_strength)
-                processed_clip = processed_clip.transform(vignette_effect)
-
-            # Déterminer le codec et les paramètres selon le mode
-            use_hw = self.config.use_hardware_accel and IS_MACOS
-
-            # Calculer le FPS de sortie (utiliser source pour éviter saccades)
-            output_fps = int(source_fps) if source_fps else self.config.output_fps
-            gop_size = output_fps * 2  # Keyframe toutes les 2 secondes
-
-            if use_hw:
-                # === ENCODAGE GPU (VideoToolbox sur Mac) ===
-                # Beaucoup plus rapide que libx264, qualité comparable
-                codec = 'h264_videotoolbox'
-                ffmpeg_params = [
-                    '-pix_fmt', 'yuv420p',
-                    '-movflags', '+faststart',
-                    '-allow_sw', '1',  # Fallback software si GPU occupé
-                    '-realtime', '0',  # Pas de limite temps réel
-                    '-max_muxing_queue_size', '9999',  # Éviter les overflow de queue
-                    '-profile:v', 'high',  # Profil H.264 haute qualité
-                    # === CORRECTIONS SACCADES ===
-                    '-vsync', 'cfr',  # Forcer framerate constant (évite saccades)
-                    '-r', str(output_fps),  # Forcer le framerate de sortie
-                    '-g', str(gop_size),  # Keyframe toutes les 2 secondes
-                    '-bf', '2',  # 2 B-frames pour meilleure compression
-                ]
-                # VideoToolbox utilise q:v au lieu de CRF
-                # q:v 40 ≈ CRF 16 (très haute qualité), q:v 50 ≈ CRF 18
-                # Plus bas = meilleure qualité, fichiers plus gros
-                ffmpeg_params.extend(['-q:v', '40'])
-                # Ajouter bitrate pour VideoToolbox (aide à la qualité)
-                ffmpeg_params.extend(['-b:v', self.config.video_bitrate])
-                console.print(
-                    f"[green]Encodage GPU (VideoToolbox) @ {output_fps}fps"
-                    f" - Haute qualité (q:v=40, {self.config.video_bitrate})[/green]"
-                )
-            else:
-                # === ENCODAGE CPU (libx264) ===
-                # Plus lent mais contrôle précis de la qualité
-                codec = 'libx264'
-                ffmpeg_params = [
-                    '-profile:v', self.config.video_profile,
-                    '-level', self.config.video_level,
-                    '-pix_fmt', 'yuv420p',
-                    '-movflags', '+faststart',
-                    '-preset', self.config.preset,
-                    '-max_muxing_queue_size', '9999',
-                    # === CORRECTIONS SACCADES ===
-                    '-vsync', 'cfr',
-                    '-r', str(output_fps),
-                    '-g', str(gop_size),
-                    '-bf', '2',
-                    '-sc_threshold', '0',
-                    '-video_track_timescale', str(output_fps * 1000),
-                    # === QUALITÉ MAXIMALE ===
-                    '-tune', 'film',  # Optimisé pour contenu filmé
-                    '-x264opts', 'rc-lookahead=60:ref=6:deblock=-1,-1:aq-mode=3',
-                ]
-                console.print(
-                    f"[dim]Encodage CPU (libx264) @ {output_fps}fps"
-                    f" - CRF {self.config.crf}, preset {self.config.preset}[/dim]"
-                )
-
-                # Utiliser CRF pour la qualité
-                if self.config.crf is not None:
-                    ffmpeg_params.extend(['-crf', str(self.config.crf)])
-
-            # Nombre de threads (auto = tous les cores)
-            import os
-            num_threads = os.cpu_count() or 8
-
-            # Paramètres de qualité vidéo
-            write_params = {
-                'fps': output_fps,
-                'codec': codec,
-                'audio_codec': 'aac',
-                'audio_bitrate': self.config.audio_bitrate,
-                'logger': None,
-                'threads': num_threads,
-                'ffmpeg_params': ffmpeg_params,
-            }
-
-            # Bitrate pour mode non-CRF
-            if not use_hw and self.config.crf is None:
-                write_params['bitrate'] = self.config.video_bitrate
-
-            # =====================================================
-            # OPTIMISATION SINGLE-PASS: Sous-titres intégrés AVANT encodage
-            # Évite le double encodage (économise ~50% du temps d'encodage)
-            # =====================================================
-            final_clip_to_encode = processed_clip
-            subtitle_clips = []
-            temp_audio_file = None
-            ass_file = None
-
-            if self.config.add_subtitles:
-                console.print(f"[cyan]Préparation sous-titres TikTok (single-pass)...[/cyan]")
-                try:
-                    from .tiktok_captions import generate_tiktok_ass
-                    from .subtitles import SubtitleGenerator
-                    from .ass_to_moviepy import render_ass_to_moviepy
-
-                    # 1. Extraire l'audio du subclip vers un fichier temporaire
-                    temp_audio_file = output_path.replace('.mp4', '_temp_audio.wav')
-                    try:
-                        console.print(f"[dim]Extraction audio pour transcription...[/dim]")
-                        subclip.audio.write_audiofile(
-                            temp_audio_file,
-                            fps=16000,  # 16kHz optimal pour Whisper
-                            nbytes=2,   # 16-bit
-                            logger=None
-                        )
-                    except Exception as e:
-                        console.print(f"[yellow]⚠ Erreur extraction audio: {e}[/yellow]")
-                        temp_audio_file = None
-
-                    # 2. Transcrire l'audio avec Whisper turbo
-                    clip_words = None
-                    if temp_audio_file and os.path.exists(temp_audio_file):
-                        console.print(f"[cyan]Transcription du clip {clip_number} avec Whisper turbo...[/cyan]")
-                        try:
-                            subtitle_gen = SubtitleGenerator(model_size="turbo", language=None)
-                            clip_transcription = subtitle_gen.transcribe_with_words(temp_audio_file)
-
-                            if clip_transcription and clip_transcription.words:
-                                clip_words = clip_transcription.words
-                                console.print(f"[green]✓ Clip transcrit: {len(clip_words)} mots[/green]")
-
-                                # Analyser la qualité du hook (3 premières secondes)
-                                if HOOK_OPTIMIZER_AVAILABLE and clip_words:
-                                    try:
-                                        optimizer = HookOptimizer(min_hook_score=0.4, hook_duration=3.0)
-                                        # Récupérer les mots des 3 premières secondes
-                                        hook_words = [
-                                            w for w in clip_words
-                                            if hasattr(w, 'start') and w.start <= 3.0
-                                        ]
-                                        if hook_words:
-                                            hook_text = " ".join(
-                                                w.word if hasattr(w, 'word') else str(w)
-                                                for w in hook_words
-                                            )
-                                            analysis = optimizer.analyze_hook(hook_text)
-                                            if analysis.score >= 0.6:
-                                                console.print(
-                                                    f"[green]✓ Hook qualité:"
-                                                    f" {analysis.score:.0%}"
-                                                    f" ({analysis.hook_type})[/green]"
-                                                )
-                                            elif analysis.score >= 0.4:
-                                                console.print(
-                                                    f"[yellow]⚠ Hook moyen:"
-                                                    f" {analysis.score:.0%}"
-                                                    f" - {hook_text[:50]}...[/yellow]"
-                                                )
-                                            else:
-                                                console.print(
-                                                    f"[red]⚠ Hook faible:"
-                                                    f" {analysis.score:.0%}"
-                                                    f" - considérer un autre"
-                                                    f" point de départ[/red]"
-                                                )
-                                    except Exception:
-                                        pass  # Silently ignore hook analysis errors
-                            else:
-                                console.print(f"[yellow]⚠ Aucun mot détecté dans le clip[/yellow]")
-                        except Exception as e:
-                            console.print(f"[yellow]⚠ Erreur transcription clip: {e}[/yellow]")
-
-                    # 3. Générer le fichier ASS et les TextClips
-                    if clip_words:
-                        ass_file = output_path.replace('.mp4', '.ass')
-                        generate_tiktok_ass(
-                            words=clip_words,
-                            preset_colors=self.config.subtitle_custom_colors,
-                            output_path=ass_file,
-                            style_config={
-                                'theme': self.config.subtitle_theme,
-                                'max_words': self.config.subtitle_max_words,
-                                'use_emojis': self.config.subtitle_use_emojis
-                            }
-                        )
-
-                        # 4. Convertir ASS en TextClips MoviePy
-                        subtitle_clips = render_ass_to_moviepy(
-                            ass_file,
-                            video_width=self.config.output_width,
-                            video_height=self.config.output_height
-                        )
-
-                        if subtitle_clips:
-                            # 5. Composite: processed_clip + sous-titres = clip final
-                            console.print(f"[cyan]Intégration sous-titres (single-pass)...[/cyan]")
-                            final_clip_to_encode = CompositeVideoClip(
-                                [processed_clip] + subtitle_clips,
-                                size=(self.config.output_width, self.config.output_height)
-                            )
-                            console.print(f"[green]✓ {len(subtitle_clips)} sous-titres intégrés[/green]")
-                        else:
-                            console.print(f"[yellow]⚠ Aucun sous-titre généré[/yellow]")
-                    else:
-                        console.print(f"[yellow]⚠ Aucune transcription disponible pour ce clip[/yellow]")
-
-                except Exception as e:
-                    console.print(f"[yellow]⚠ Échec préparation sous-titres: {e}[/yellow]")
-                    # Fallback: encoder sans sous-titres
-                    final_clip_to_encode = processed_clip
-                finally:
-                    # Cleanup fichiers temporaires
-                    if temp_audio_file and os.path.exists(temp_audio_file):
-                        try:
-                            os.remove(temp_audio_file)
-                        except Exception:
-                            pass
-                    if ass_file and os.path.exists(ass_file):
-                        try:
-                            os.remove(ass_file)
-                        except Exception:
-                            pass
-
-            # Écrire le fichier final (UN SEUL encodage)
-            final_clip_to_encode.write_videofile(output_path, **write_params)
-
-            # Cleanup des TextClips
-            for tc in subtitle_clips:
-                try:
-                    tc.close()
-                except Exception:
-                    pass
-
-        finally:
-            # Fermer le CompositeVideoClip s'il est différent du processed_clip
-            if final_clip_to_encode is not None and final_clip_to_encode is not processed_clip:
-                try:
-                    final_clip_to_encode.close()
-                except Exception:
-                    pass
-            if processed_clip is not None:
-                try:
-                    processed_clip.close()
-                except Exception:
-                    pass
-            if subclip is not None:
-                try:
-                    subclip.close()
-                except Exception:
-                    pass
-
-    def _analyze_adaptive_segments(
+    def _analyze_focus_points(
         self,
         video_path: str,
-        moments: List[ViralMoment],
-        sample_rate: int = 2
+        moments: List[ViralMoment]
     ) -> List[Tuple[float, FocusPoint]]:
         """
-        Analyse les segments avec AdaptiveCropManager pour détecter le type de contenu
-        et utiliser la stratégie de crop appropriée pour chaque segment.
+        Analyse les points de focus selon la stratégie configurée.
 
         Args:
-            video_path: Chemin vers la vidéo
-            moments: Liste des moments viraux à analyser
-            sample_rate: Nombre de frames par seconde à analyser
+            video_path: Chemin vers la vidéo source
+            moments: Moments viraux à analyser
 
         Returns:
-            Liste de (timestamp, FocusPoint) avec stratégie adaptée
+            Liste de (timestamp, FocusPoint)
         """
-        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
-
-        if not moments or self.adaptive_manager is None:
+        if not self.config.smart_crop:
+            console.print(f"[dim]Mode rapide: crop centré (--no-smart-crop)[/dim]")
             return []
 
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        if fps <= 0:
-            fps = 30.0  # Fallback FPS par défaut
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        video_duration = total_frames / fps
+        # En mode rapide: sample_rate plus bas (1 fps au lieu de 2)
+        sample_rate = 1 if self.config.fast_mode else 2
 
-        try:
-            # Analyser chaque segment et stocker son type
-            segment_types: Dict[int, Tuple[ContentType, Any]] = {}
-            for i, moment in enumerate(moments):
-                content_type, analysis = self.adaptive_manager.analyze_and_select_strategy(
-                    video_path, moment.start_time, moment.end_time
-                )
-                segment_types[i] = (content_type, analysis)
+        # === NOUVEAU TRACKER (plus fluide) ===
+        if self.focus_tracker is not None:
+            return self._analyze_with_new_tracker(video_path, moments)
 
-            # Résumé des types détectés
-            type_counts = {}
-            for _, (ct, _) in segment_types.items():
-                type_counts[ct.name] = type_counts.get(ct.name, 0) + 1
-            console.print(f"[dim]Types détectés: {type_counts}[/dim]")
+        # === ANCIEN SYSTÈME ADAPTATIF (fallback) ===
+        if self.adaptive_manager is not None:
+            console.print("[cyan]Analyse adaptative du contenu (ancien système)...[/cyan]")
+            return analyze_adaptive_segments(
+                video_path, moments, self.adaptive_manager,
+                self.cropper, sample_rate=sample_rate
+            )
 
-            # Calculer les frames à analyser
-            total_segment_duration = sum(m.end_time - m.start_time for m in moments)
-            frame_interval = max(1, int(fps / sample_rate))
-            frames_to_analyze = int(total_segment_duration * sample_rate)
+        # Mode classique: SmartCropper avec détection de visage
+        segments = [(m.start_time, m.end_time) for m in moments]
+        return self.cropper.analyze_video_segments(
+            video_path, segments, sample_rate=sample_rate
+        )
 
-            console.print(f"[dim]Analyse adaptative: {total_segment_duration:.0f}s sur {len(moments)} segment(s)[/dim]")
+    def _analyze_with_new_tracker(
+        self,
+        video_path: str,
+        moments: List[ViralMoment]
+    ) -> List[Tuple[float, FocusPoint]]:
+        """
+        Analyse avec le nouveau FocusTracker (plus fluide).
 
-            focus_points: List[Tuple[float, FocusPoint]] = []
-            prev_focus: Optional[FocusPoint] = None
+        Args:
+            video_path: Chemin vers la vidéo source
+            moments: Moments viraux à analyser
 
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeRemainingColumn(),
-                console=console
-            ) as progress:
-                task = progress.add_task(
-                    f"Analyse adaptative ({total_segment_duration:.0f}s)...",
-                    total=frames_to_analyze
-                )
+        Returns:
+            Liste de (timestamp, FocusPoint)
+        """
+        console.print("[cyan]Analyse du contenu (nouveau tracker)...[/cyan]")
+        segments = [(m.start_time, m.end_time) for m in moments]
 
-                for seg_idx, moment in enumerate(moments):
-                    # Sélectionner la stratégie pour ce segment
-                    content_type, _ = segment_types[seg_idx]
-                    self.adaptive_manager._current_strategy = self.adaptive_manager.strategies[content_type]
+        # Auto-détection du preset si "auto"
+        if self.config.tracking_preset.lower() == 'auto':
+            detected_preset, analysis = analyze_content_type(video_path)
+            old_tracker = self.focus_tracker
+            self.focus_tracker = FocusTracker(preset=detected_preset)
+            try:
+                old_tracker.close()
+            except Exception:
+                pass
+            console.print(
+                f"[dim]Type détecté: {detected_preset.value}"
+                f" (faces={analysis.get('has_face', False)},"
+                f" motion={analysis.get('motion_level', 0):.2f})[/dim]"
+            )
 
-                    start_frame = int(moment.start_time * fps)
-                    end_frame = int(moment.end_time * fps)
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        # Analyser la vidéo avec le nouveau tracker
+        new_focus_points = self.focus_tracker.analyze_video(
+            video_path,
+            segments=segments,
+            progress_callback=lambda p, m: console.print(f"[dim]{m}[/dim]") if p % 25 == 0 else None
+        )
 
-                    frame_count = start_frame
+        # Convertir en format legacy (timestamp, FocusPoint)
+        focus_points = [
+            (fp.timestamp, FocusPoint(x=fp.x, y=fp.y, confidence=fp.confidence))
+            for fp in new_focus_points
+        ]
+        console.print(f"[green]{len(focus_points)} points de focus analysés[/green]")
+        return focus_points
 
-                    while frame_count < end_frame:
-                        ret, frame = cap.read()
-                        if not ret:
+    def _generate_all_clips(
+        self,
+        video: VideoFileClip,
+        moments: List[ViralMoment],
+        focus_points: List[Tuple[float, FocusPoint]],
+        actual_video_path: str,
+        video_path_obj: Path,
+        output_dir_obj: Path,
+        start_index: int
+    ) -> List[str]:
+        """
+        Génère tous les clips (parallèle ou séquentiel).
+
+        Args:
+            video: Vidéo source ouverte
+            moments: Moments viraux
+            focus_points: Points de focus analysés
+            actual_video_path: Chemin effectif de la vidéo (sanitisée ou originale)
+            video_path_obj: Path de la vidéo source
+            output_dir_obj: Path du dossier de sortie
+            start_index: Index de départ pour la numérotation
+
+        Returns:
+            Liste des chemins des clips générés
+        """
+        generated_clips: List[str] = []
+
+        if self.config.parallel_processing and len(moments) > 1:
+            return self._generate_clips_parallel(
+                moments, focus_points, actual_video_path,
+                video_path_obj, output_dir_obj, start_index
+            )
+
+        return self._generate_clips_sequential(
+            video, moments, focus_points,
+            video_path_obj, output_dir_obj, start_index
+        )
+
+    def _generate_clips_parallel(
+        self,
+        moments: List[ViralMoment],
+        focus_points: List[Tuple[float, FocusPoint]],
+        actual_video_path: str,
+        video_path_obj: Path,
+        output_dir_obj: Path,
+        start_index: int
+    ) -> List[str]:
+        """
+        Génère les clips en parallèle (2-4x plus rapide).
+        """
+        generated_clips: List[str] = []
+
+        console.print(
+            f"[cyan]Génération parallèle de {len(moments)} clips"
+            f" ({self.config.max_parallel_clips} en parallèle)...[/cyan]"
+        )
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Génération des clips...", total=len(moments))
+
+            def generate_clip_task(args):
+                i, moment = args
+                clip_name = f"{video_path_obj.stem}_clip_{i:02d}.mp4"
+                clip_path = output_dir_obj / clip_name
+
+                video_thread = None
+                try:
+                    video_thread = VideoFileClip(actual_video_path)
+
+                    for attempt in range(2):
+                        try:
+                            encode_single_clip(
+                                video=video_thread,
+                                moment=moment,
+                                focus_points=focus_points,
+                                output_path=str(clip_path),
+                                clip_number=i,
+                                config=self.config,
+                                process_frame_func=self._process_frame
+                            )
+                            return (i, str(clip_path), True, None)
+                        except Exception as e:
+                            if attempt == 0:
+                                time.sleep(1)
+                                gc.collect()
+                            else:
+                                return (i, str(clip_path), False, str(e))
+
+                    return (i, str(clip_path), False, "Erreur inconnue")
+                except Exception as e:
+                    return (i, str(clip_path), False, f"Erreur ouverture vidéo: {e}")
+                finally:
+                    if video_thread:
+                        try:
+                            video_thread.close()
+                        except Exception:
+                            pass
+                    gc.collect()
+
+            tasks = [(i, moment) for i, moment in enumerate(moments, start_index)]
+
+            with ThreadPoolExecutor(max_workers=self.config.max_parallel_clips) as executor:
+                futures = {executor.submit(generate_clip_task, t): t for t in tasks}
+
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                        if result is None:
+                            continue
+
+                        i, clip_path, success, error = result
+
+                        if success:
+                            generated_clips.append(clip_path)
+                            moment = [m for idx, m in enumerate(moments, start_index) if idx == i][0]
+                            console.print(
+                                f"  [green]OK[/green] Clip {i}:"
+                                f" {moment.start_time:.1f}s - {moment.end_time:.1f}s"
+                            )
+                        else:
+                            console.print(f"  [red]X[/red] Erreur clip {i}: {error}")
+                    except Exception as e:
+                        console.print(f"  [red]X[/red] Erreur future: {e}")
+
+                    progress.update(task, advance=1)
+
+            generated_clips.sort()
+
+        return generated_clips
+
+    def _generate_clips_sequential(
+        self,
+        video: VideoFileClip,
+        moments: List[ViralMoment],
+        focus_points: List[Tuple[float, FocusPoint]],
+        video_path_obj: Path,
+        output_dir_obj: Path,
+        start_index: int
+    ) -> List[str]:
+        """
+        Génère les clips séquentiellement (compatible, fallback).
+        """
+        generated_clips: List[str] = []
+
+        console.print(f"[dim]Génération séquentielle de {len(moments)} clips...[/dim]")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Génération des clips...", total=len(moments))
+
+            max_retries = 3
+            for i, moment in enumerate(moments, start_index):
+                clip_name = f"{video_path_obj.stem}_clip_{i:02d}.mp4"
+                clip_path = output_dir_obj / clip_name
+
+                gc.collect()
+
+                for attempt in range(max_retries):
+                    try:
+                        encode_single_clip(
+                            video=video,
+                            moment=moment,
+                            focus_points=focus_points,
+                            output_path=str(clip_path),
+                            clip_number=i,
+                            config=self.config,
+                            process_frame_func=self._process_frame
+                        )
+                        generated_clips.append(str(clip_path))
+                        console.print(
+                            f"  [green]OK[/green] Clip {i}:"
+                            f" {moment.start_time:.1f}s - {moment.end_time:.1f}s"
+                        )
+                        break
+                    except Exception as e:
+                        error_msg = str(e)
+                        gc.collect()
+
+                        if (attempt < max_retries - 1
+                                and ("stdout" in error_msg
+                                     or "NoneType" in error_msg
+                                     or "Proc" in error_msg)):
+                            wait_time = (attempt + 1) * 2
+                            console.print(
+                                f"  [yellow]![/yellow] Clip {i}:"
+                                f" Retry ({attempt + 1}/{max_retries})"
+                                f" dans {wait_time}s..."
+                            )
+                            time.sleep(wait_time)
+                        else:
+                            console.print(f"  [red]X[/red] Erreur clip {i}: {e}")
                             break
 
-                        if (frame_count - start_frame) % frame_interval == 0:
-                            timestamp = frame_count / fps
-                            try:
-                                # Utiliser la stratégie adaptative
-                                focus_point = self.adaptive_manager.get_focus_point(frame, prev_focus)
-                                prev_focus = focus_point
-                            except Exception:
-                                # Fallback en cas d'erreur
-                                focus_point = FocusPoint(x=0.5, y=0.5, confidence=0.1)
+                progress.update(task, advance=1)
 
-                            focus_points.append((timestamp, focus_point))
-                            progress.update(task, advance=1)
+        return generated_clips
 
-                        frame_count += 1
-        finally:
-            cap.release()
+    def _cleanup_resources(
+        self,
+        video: Optional[VideoFileClip],
+        sanitized_video_path: Optional[str]
+    ) -> None:
+        """
+        Nettoie toutes les ressources (vidéo, cropper, tracker, cache, fichiers temp).
+        """
+        if video is not None:
+            try:
+                video.close()
+            except Exception:
+                pass
+        try:
+            self.cropper.close()
+        except Exception:
+            pass
+        if self.adaptive_manager is not None:
+            try:
+                self.adaptive_manager.close()
+            except Exception:
+                pass
+        if self.focus_tracker is not None:
+            try:
+                self.focus_tracker.close()
+            except Exception:
+                pass
 
-        # Appliquer le lissage temporel
-        if len(focus_points) > 3:
-            focus_points = self.cropper.smooth_focus_points(focus_points)
-            console.print(f"[dim]Lissage temporel appliqué[/dim]")
+        # Nettoyer le cache de frames
+        global _frame_cache
+        with _cache_lock:
+            _frame_cache.clear()
+        gc.collect()
 
-        console.print(f"[green]Analyse adaptative terminée: {len(focus_points)} points de focus[/green]")
-
-        return focus_points
+        # Nettoyer le fichier audio sanitisé temporaire
+        if sanitized_video_path and os.path.exists(sanitized_video_path):
+            try:
+                os.remove(sanitized_video_path)
+            except Exception:
+                pass
 
     def _process_frame(
         self,
@@ -956,7 +630,6 @@ class ClipGenerator:
         2. Blur fill si nécessaire
         3. Color grading cinématique (désactivé en fast_mode)
         4. Sharpening intelligent (désactivé en fast_mode)
-        5. Vignette (optionnel)
 
         Cache: Les frames sont mises en cache pour éviter de les redécoder
         """
@@ -975,8 +648,6 @@ class ClipGenerator:
         h, w = frame.shape[:2]
 
         # Obtenir le point de focus interpolé
-        # Nouveau tracker: focus_points est une liste de (timestamp, FocusPoint)
-        # On utilise le nouveau système si disponible
         if self.focus_tracker is not None and focus_points:
             # Nouveau système: interpolation intégrée
             x, y, confidence = self.focus_tracker.get_focus_at(
@@ -1033,22 +704,16 @@ class ClipGenerator:
 
         # Appliquer les effets visuels cinématiques (sauf en mode rapide)
         if not self.config.fast_mode:
-            # 1. Color grading
             if self.config.enable_color_grading:
                 result = apply_color_grading(result, self.config.color_grading_style)
 
-            # 2. Sharpening
             if self.config.enable_sharpening:
                 result = apply_sharpening(result, self.config.sharpening_strength)
-
-        # 3. Vignette (après resize final pour de meilleures performances)
-        # Note: vignette appliquée après le resize dans _generate_single_clip
 
         # Mettre en cache le résultat (limiter la taille du cache à 100 frames max)
         if not self.config.parallel_processing:
             with _cache_lock:
                 if len(_frame_cache) > 100:
-                    # Supprimer 20% des frames les plus anciennes
                     keys_to_remove = list(_frame_cache.keys())[:20]
                     for key in keys_to_remove:
                         del _frame_cache[key]
