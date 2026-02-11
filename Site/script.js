@@ -1,3 +1,8 @@
+// Constantes de configuration
+const NAVBAR_SCROLL_THRESHOLD = 50;
+const COUNTER_ANIMATION_STEPS = 50;
+const STAT_TARGET_PERCENT = 96;
+
 // ==================== SMOOTH SCROLL ==================== */
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function(e) {
@@ -24,7 +29,7 @@ const navbar = document.querySelector('.navbar');
 window.addEventListener('scroll', () => {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
 
-    if (scrollTop > 50) {
+    if (scrollTop > NAVBAR_SCROLL_THRESHOLD) {
         navbar.classList.add('scrolled');
         navbar.style.background = 'rgba(255, 255, 255, 0.98)';
     } else {
@@ -62,7 +67,7 @@ document.querySelectorAll('.feature, .persona, .content-type, .problem-card, .so
 // ==================== COUNTER ANIMATION ==================== */
 function animateCounter(element, target) {
     let current = 0;
-    const increment = target / 50;
+    const increment = target / COUNTER_ANIMATION_STEPS;
     const duration = 2000;
 
     const counter = setInterval(() => {
@@ -73,7 +78,7 @@ function animateCounter(element, target) {
         } else {
             element.textContent = Math.floor(current);
         }
-    }, duration / 50);
+    }, duration / COUNTER_ANIMATION_STEPS);
 }
 
 // Observe stats section
@@ -84,7 +89,7 @@ const statsObserver = new IntersectionObserver((entries) => {
             statNumbers.forEach(stat => {
                 const text = stat.textContent.trim();
                 if (text === '96%') {
-                    animateCounter(stat, 96);
+                    animateCounter(stat, STAT_TARGET_PERCENT);
                     stat.textContent = '96%';
                 }
             });

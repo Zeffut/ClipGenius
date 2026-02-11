@@ -19,7 +19,38 @@ from rich.console import Console
 
 console = Console()
 
-
+# Constantes de configuration
+DEFAULT_MIN_CLIP_DURATION: float = 30.0
+DEFAULT_MAX_CLIP_DURATION: float = 90.0
+DEFAULT_MAX_CLIPS: int = 5
+DEFAULT_MIN_VIRAL_SCORE: float = 0.70
+CLIPS_PER_DURATION_RATIO: int = 180  # 1 clip toutes les 3 minutes
+SECTION_DURATION_SECONDS: int = 900  # 15 minutes par section
+LLM_SECTION_MAX_TOKENS: int = 800
+LLM_SECTION_TEMPERATURE: float = 0.2
+LLM_SECTION_TOP_P: float = 0.9
+LLM_SEGMENT_MAX_TOKENS: int = 200
+LLM_SEGMENT_TEMPERATURE: float = 0.1
+MAX_LLM_RETRIES: int = 3
+HOOK_MAX_LENGTH: int = 200
+EMOTION_MAX_LENGTH: int = 20
+REASON_MAX_LENGTH: int = 200
+HOOK_DISPLAY_MAX_LENGTH: int = 100
+SEGMENT_TEXT_MAX_LENGTH: int = 800
+MOMENT_MIN_SCORE_THRESHOLD: float = 0.5
+MERGE_GAP_SECONDS: float = 5.0
+DURATION_TOLERANCE_FACTOR: float = 1.2
+MIN_DURATION_FACTOR: float = 0.5
+OVERLAP_REJECTION_RATIO: float = 0.3
+SENTENCE_SEARCH_WINDOW: float = 5.0
+FALLBACK_MIN_TEXT_LENGTH: int = 50
+FALLBACK_BASE_SCORE: float = 0.4
+FALLBACK_KEYWORD_BONUS: float = 0.15
+FALLBACK_PUNCTUATION_BONUS: float = 0.1
+FALLBACK_LENGTH_BONUS: float = 0.05
+FALLBACK_LENGTH_THRESHOLD: int = 100
+FALLBACK_SCORE_CAP: float = 0.7
+FALLBACK_HOOK_PREVIEW_LENGTH: int = 50
 
 
 @dataclass
@@ -31,13 +62,13 @@ class ViralMomentAI:
     hook: str  # Phrase d'accroche suggérée
     reason: str  # Pourquoi c'est viral
     emotion: str  # Émotion principale (humour, surprise, émotion, tension, etc.)
-    
+
     @property
     def duration(self) -> float:
         return self.end_time - self.start_time
 
 
-@dataclass 
+@dataclass
 class TranscriptSegment:
     """Segment de transcription avec timestamps"""
     start: float
@@ -51,7 +82,7 @@ class LocalAIViralAnalyzer:
 
     Pas d'API cloud, pas de clé requise, fonctionne offline.
     Optimisé pour segments vidéo courts (30-90s).
-    
+
     Phi-4-mini offre de meilleures performances de raisonnement que Phi-3,
     avec le même format de prompt.
     """
@@ -123,10 +154,10 @@ Réponds avec CE FORMAT JSON EXACT:
         self,
         model_path: Optional[str] = None,
         n_threads: Optional[int] = None,
-        min_clip_duration: float = 30.0,
-        max_clip_duration: float = 90.0,
-        max_clips: int = 5,  # Réduit de 10 à 5 pour éviter trop de clips
-        min_viral_score: float = 0.70,  # Seuil minimum de qualité
+        min_clip_duration: float = DEFAULT_MIN_CLIP_DURATION,
+        max_clip_duration: float = DEFAULT_MAX_CLIP_DURATION,
+        max_clips: int = DEFAULT_MAX_CLIPS,  # Réduit de 10 à 5 pour éviter trop de clips
+        min_viral_score: float = DEFAULT_MIN_VIRAL_SCORE,  # Seuil minimum de qualité
         content_type: str = "unknown",  # Type de contenu pour adapter l'analyse
     ):
         """
@@ -149,7 +180,7 @@ Réponds avec CE FORMAT JSON EXACT:
         self.max_clips = max_clips
         self.min_viral_score = min_viral_score
         self.content_type = content_type.lower()
-        
+
         # Types de contenu "calmes" où l'excitation audio n'est pas pertinente
         self.calm_content_types = {"podcast", "interview", "tutorial", "news", "motivational"}
 
@@ -162,7 +193,7 @@ Réponds avec CE FORMAT JSON EXACT:
     ) -> List[ViralMomentAI]:
         """
         Analyse les segments pour identifier les moments viraux.
-        
+
         ✨ NOUVELLE APPROCHE RAPIDE: 1 seule analyse globale au lieu de N analyses individuelles.
 
         Args:
@@ -179,28 +210,31 @@ Réponds avec CE FORMAT JSON EXACT:
             return []
 
         console.print("[cyan]Analyse locale du contenu (Phi-4-mini)...[/cyan]")
-        
+
         # 🎯 NOUVELLE STRATÉGIE: Découper en sections de ~15 minutes
         # Pour chaque section → analyse indépendante → 2-3 meilleurs moments
         # Limiter le nombre total en fonction de la durée
-        
-        SECTION_DURATION = 900  # 15 minutes = 900 secondes
-        
+
+        SECTION_DURATION = SECTION_DURATION_SECONDS
+
         # Calculer un max_clips intelligent basé sur la durée
         # Règle: ~1 clip par 3-4 minutes de vidéo, minimum 1, maximum self.max_clips
-        smart_max_clips = max(1, min(self.max_clips, int(video_duration / 180)))  # 1 clip / 3 min
+        smart_max_clips = max(1, min(self.max_clips, int(video_duration / CLIPS_PER_DURATION_RATIO)))  # 1 clip / 3 min
         console.print(f"[dim]Durée: {video_duration/60:.1f}min → max {smart_max_clips} clips[/dim]")
-        
+
         # Découper la vidéo en sections de 15 minutes
         sections = self._split_into_sections(segments, video_duration, SECTION_DURATION)
         total_sections = len(sections)
-        
+
         console.print(f"[cyan]📹 Vidéo découpée en {total_sections} sections de ~15min[/cyan]")
-        
+
         all_moments = []
-        
-        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-        
+
+        from rich.progress import (
+            Progress, SpinnerColumn, TextColumn,
+            BarColumn, TaskProgressColumn, TimeRemainingColumn
+        )
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -211,38 +245,38 @@ Réponds avec CE FORMAT JSON EXACT:
             transient=True
         ) as progress:
             task = progress.add_task("Analyse par sections...", total=total_sections)
-            
+
             for i, section in enumerate(sections):
                 try:
                     if progress_callback:
                         pct = i / total_sections
                         progress_callback(pct, f"Section {i+1}/{total_sections}")
-                    
+
                     # Analyser cette section (demande 3-5 moments)
                     section_moments = self._analyze_section(section, i+1, total_sections)
                     all_moments.extend(section_moments)
-                    
+
                     console.print(f"[dim]Section {i+1}/{total_sections}: {len(section_moments)} moments trouvés[/dim]")
-                    
+
                 except Exception as e:
                     console.print(f"[yellow]⚠️ Erreur section {i+1}: {e}[/yellow]")
                     continue
                 finally:
                     progress.update(task, advance=1)
-        
+
         if progress_callback:
             progress_callback(1.0, f"Analyse terminée: {len(all_moments)} moments trouvés")
-        
+
         console.print(f"[green]✅ {len(all_moments)} moments viraux détectés au total[/green]")
-        
+
         # Trier par score et valider (utiliser smart_max_clips)
         all_moments.sort(key=lambda m: m.score, reverse=True)
         validated = self._validate_moments(all_moments, video_duration, max_clips_override=smart_max_clips)
-        
+
         console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(all_moments)}[/cyan]")
-        
+
         return validated
-    
+
     def _build_timestamped_transcript(self, segments: List[TranscriptSegment]) -> str:
         """Construit une transcription avec timestamps pour l'analyse globale."""
         lines = []
@@ -252,43 +286,43 @@ Réponds avec CE FORMAT JSON EXACT:
             timestamp = f"[{mins:02d}:{secs:02d}]"
             lines.append(f"{timestamp} {seg.text}")
         return "\n".join(lines)
-    
+
     def _split_into_sections(
-        self, 
-        segments: List[TranscriptSegment], 
+        self,
+        segments: List[TranscriptSegment],
         video_duration: float,
         section_duration: float = 900
     ) -> List[List[TranscriptSegment]]:
         """
         Découpe les segments en sections temporelles de ~15 minutes.
-        
+
         Args:
             segments: Tous les segments de transcription
             video_duration: Durée totale de la vidéo
             section_duration: Durée cible d'une section (900s = 15min)
-        
+
         Returns:
             Liste de sections, chaque section = liste de segments
         """
         sections = []
         current_section = []
         section_start = 0.0
-        
+
         for seg in segments:
             # Si le segment dépasse la limite de temps, créer une nouvelle section
             if seg.start >= section_start + section_duration and current_section:
                 sections.append(current_section)
                 current_section = []
                 section_start = seg.start
-            
+
             current_section.append(seg)
-        
+
         # Ajouter la dernière section
         if current_section:
             sections.append(current_section)
-        
+
         return sections
-    
+
     def _analyze_section(
         self,
         section_segments: List[TranscriptSegment],
@@ -298,27 +332,27 @@ Réponds avec CE FORMAT JSON EXACT:
         """
         Analyse une section de ~15 minutes et retourne 3-5 meilleurs moments.
         Réessaie jusqu'à 3 fois si le JSON est invalide.
-        
+
         Args:
             section_segments: Segments de cette section
             section_num: Numéro de la section (pour affichage)
             total_sections: Nombre total de sections
-        
+
         Returns:
             Liste de 3-5 moments viraux de cette section
         """
         if not section_segments:
             return []
-        
+
         # Construire la transcription de cette section
         section_transcript = self._build_timestamped_transcript(section_segments)
         section_start = section_segments[0].start
         section_end = section_segments[-1].end
         section_duration = section_end - section_start
-        
+
         # Adapter les critères selon le type de contenu
         is_calm_content = self.content_type in self.calm_content_types
-        
+
         if is_calm_content:
             # === PROMPT POUR CONTENU CALME (podcast, interview, tutorial) ===
             # L'excitation audio n'est PAS un critère - on cherche la VALEUR du message
@@ -340,7 +374,7 @@ NE PAS chercher:
 - Émotion intense (humour fort, surprise majeure, tension palpable)
 - Message complet et autonome (compréhensible hors contexte)
 - Début ET fin sur des limites de phrases"""
-        
+
         # Créer le prompt pour cette section
         prompt = f"""<|system|>
 Tu es un expert en contenu viral pour TikTok/Reels/Shorts. Tu identifies les meilleurs moments d'une section de vidéo.
@@ -394,33 +428,33 @@ IMPORTANT: Le champ "hook" doit contenir la VRAIE première phrase du clip (copi
 Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 <|assistant|>
 """
-        
+
         # Système de retry (max 3 tentatives)
-        max_retries = 3
+        max_retries = MAX_LLM_RETRIES
         for attempt in range(max_retries):
             try:
                 # Générer avec le LLM
                 response = self.llm.generate(
                     prompt,
-                    max_tokens=800,  # 3-5 moments = ~500-700 tokens
-                    temperature=0.2,  # Un peu de créativité pour varier les sélections
-                    top_p=0.9,
+                    max_tokens=LLM_SECTION_MAX_TOKENS,  # 3-5 moments = ~500-700 tokens
+                    temperature=LLM_SECTION_TEMPERATURE,  # Un peu de créativité pour varier les sélections
+                    top_p=LLM_SECTION_TOP_P,
                     stop=["<|end|>", "\n\n\n"]
                 )
-                
+
                 # Parser la réponse
                 moments = self._parse_global_response(response.text, section_segments)
-                
+
                 # Si on a réussi à parser au moins 1 moment, c'est bon
                 if moments:
                     return moments
-                
+
                 # Si aucun moment mais pas d'exception, retry
                 if attempt < max_retries - 1:
                     continue
                 else:
                     return []
-                
+
             except Exception as e:
                 # En cas d'erreur JSON, retry silencieusement
                 if attempt < max_retries - 1:
@@ -428,73 +462,73 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 else:
                     # Dernière tentative échouée, retourner liste vide (pas de message d'erreur)
                     return []
-        
+
         return []
-    
+
     def _parse_global_response(self, response_text: str, segments: List[TranscriptSegment]) -> List[ViralMomentAI]:
         """Parse la réponse globale du LLM (tableau JSON de moments)."""
         response_text = response_text.strip()
         moments = []
-        
+
         try:
             # Extraire le tableau JSON
             json_start = response_text.find('[')
             json_end = response_text.rfind(']') + 1
-            
+
             if json_start >= 0 and json_end > json_start:
                 json_text = response_text[json_start:json_end]
                 data = json.loads(json_text)
-                
+
                 if isinstance(data, list):
                     for item in data:
                         try:
                             moment = ViralMomentAI(
                                 start_time=float(item.get('start', 0)),
                                 end_time=float(item.get('end', 0)),
-                                score=float(item.get('score', 0.5)),
-                                hook=item.get('hook', '')[:200],
-                                emotion=item.get('emotion', 'neutre')[:20],
-                                reason=item.get('reason', '')[:200]
+                                score=float(item.get('score', MOMENT_MIN_SCORE_THRESHOLD)),
+                                hook=item.get('hook', '')[:HOOK_MAX_LENGTH],
+                                emotion=item.get('emotion', 'neutre')[:EMOTION_MAX_LENGTH],
+                                reason=item.get('reason', '')[:REASON_MAX_LENGTH]
                             )
-                            
+
                             duration = moment.end_time - moment.start_time
-                            if (self.min_clip_duration <= duration <= self.max_clip_duration 
-                                and moment.score >= 0.5):  # Seuil pour filtrer les moments de qualité
+                            if (self.min_clip_duration <= duration <= self.max_clip_duration
+                                and moment.score >= MOMENT_MIN_SCORE_THRESHOLD):  # Seuil pour filtrer les moments de qualité
                                 moments.append(moment)
                         except (ValueError, KeyError) as e:
                             console.print(f"[dim]⚠️ Moment invalide ignoré: {e}[/dim]")
                             continue
                 else:
                     raise ValueError("Réponse n'est pas un tableau JSON")
-                    
+
         except Exception as e:
             console.print(f"[yellow]⚠️ Erreur parsing JSON: {e}[/yellow]")
             console.print(f"[dim]Réponse LLM: {response_text[:200]}...[/dim]")
-        
+
         moments.sort(key=lambda m: m.score, reverse=True)
-        
+
         # Snap aux limites de phrases pour éviter de couper au milieu
         moments = [self._snap_to_sentence_boundaries(m, segments) for m in moments]
-        
+
         return moments
-    
+
     def _snap_to_sentence_boundaries(
-        self, 
-        moment: ViralMomentAI, 
+        self,
+        moment: ViralMomentAI,
         segments: List[TranscriptSegment]
     ) -> ViralMomentAI:
         """
         Ajuste les timestamps pour commencer/finir sur des limites de phrases.
-        
+
         Cherche le début de phrase le plus proche pour start_time,
         et la fin de phrase la plus proche pour end_time.
         """
         if not segments:
             return moment
-        
+
         # Marge de recherche (en secondes)
-        SEARCH_WINDOW = 5.0
-        
+        SEARCH_WINDOW = SENTENCE_SEARCH_WINDOW
+
         # === SNAP DU DÉBUT ===
         # Chercher le segment qui contient ou précède start_time
         best_start = moment.start_time
@@ -502,7 +536,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             # Segment dans la fenêtre de recherche
             if abs(seg.start - moment.start_time) <= SEARCH_WINDOW:
                 text = seg.text.strip()
-                
+
                 # Si le segment commence par une majuscule ou après ponctuation = bon début
                 if text and (text[0].isupper() or seg.start == 0):
                     # Préférer un début légèrement avant le timestamp LLM
@@ -512,14 +546,14 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                     # Ou légèrement après si pas d'autre option
                     elif best_start == moment.start_time:
                         best_start = seg.start
-        
+
         # === SNAP DE LA FIN ===
         # Chercher la fin de phrase la plus proche de end_time
         best_end = moment.end_time
         for seg in segments:
             if abs(seg.end - moment.end_time) <= SEARCH_WINDOW:
                 text = seg.text.strip()
-                
+
                 # Si le segment finit par ponctuation forte = bonne fin
                 if text and text[-1] in '.!?':
                     # Préférer une fin légèrement après le timestamp LLM
@@ -529,7 +563,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                     # Ou légèrement avant si pas d'autre option
                     elif best_end == moment.end_time:
                         best_end = seg.end
-        
+
         # Vérifier que la durée reste valide
         new_duration = best_end - best_start
         if new_duration < self.min_clip_duration:
@@ -538,7 +572,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         elif new_duration > self.max_clip_duration:
             # Durée trop longue, raccourcir la fin
             best_end = best_start + self.max_clip_duration
-        
+
         # Créer un nouveau moment avec les timestamps ajustés
         return ViralMomentAI(
             start_time=best_start,
@@ -548,7 +582,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             emotion=moment.emotion,
             reason=moment.reason
         )
-    
+
     def _analyze_segment_by_segment(
         self,
         segments: List[TranscriptSegment],
@@ -557,14 +591,17 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
     ) -> List[ViralMomentAI]:
         """Ancien système d'analyse segment par segment (fallback pour vidéos très longues)."""
         console.print("[yellow]Mode segment par segment (lent)[/yellow]")
-        
+
         combined_segments = self._combine_segments(segments)
         total_to_analyze = len(combined_segments)
         console.print(f"[dim]{total_to_analyze} segments à analyser[/dim]")
 
         moments = []
-        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-        
+        from rich.progress import (
+            Progress, SpinnerColumn, TextColumn,
+            BarColumn, TaskProgressColumn, TimeRemainingColumn
+        )
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -575,7 +612,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             transient=True
         ) as progress:
             task = progress.add_task("Analyse IA...", total=total_to_analyze)
-            
+
             for i, seg in enumerate(combined_segments):
                 try:
                     moment = self._analyze_segment(seg, video_duration, i + 1, total_to_analyze)
@@ -586,7 +623,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                     continue
                 finally:
                     progress.update(task, advance=1, description=f"Segment {i+1}/{total_to_analyze}")
-                    
+
                     if progress_callback:
                         try:
                             pct = (i + 1) / total_to_analyze
@@ -597,13 +634,13 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         # Trier par score et garder les meilleurs
         console.print(f"[green]✅ Analyse terminée: {len(moments)} moments trouvés[/green]")
         moments.sort(key=lambda m: m.score, reverse=True)
-        
+
         # Valider et supprimer les chevauchements
         validated = self._validate_moments(moments, video_duration)
-        
+
         console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(moments)}[/cyan]")
         return validated
-    
+
     def _combine_segments(self, segments: List[TranscriptSegment]) -> List[TranscriptSegment]:
         """Combine les petits segments en blocs de 30-90s pour analyse."""
         if not segments:
@@ -611,30 +648,30 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 
         combined = []
         target_duration = (self.min_clip_duration + self.max_clip_duration) / 2
-        
+
         i = 0
         while i < len(segments):
             current_start = segments[i].start
             current_texts = []
             current_end = segments[i].end
             j = i
-            
+
             while j < len(segments):
                 current_texts.append(segments[j].text)
                 current_end = segments[j].end
                 duration = current_end - current_start
-                
+
                 if duration >= self.min_clip_duration:
                     break
                 j += 1
-            
+
             if current_texts:
                 combined.append(TranscriptSegment(
                     start=current_start,
                     end=current_end,
                     text=" ".join(current_texts)
                 ))
-            
+
             # Avancer sans chevauchement pour analyser toute la vidéo
             i = j + 1 if j < len(segments) - 1 else len(segments)
 
@@ -653,7 +690,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         duration = segment.end - segment.start
 
         # Limiter le texte pour performance (mais garder assez de contexte)
-        text = segment.text[:800]
+        text = segment.text[:SEGMENT_TEXT_MAX_LENGTH]
 
         prompt = self.PROMPT_TEMPLATE.format(
             start=segment.start,
@@ -665,8 +702,8 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         # Générer avec le LLM
         response = self.llm.generate(
             prompt,
-            max_tokens=200,
-            temperature=0.1,  # Plus déterministe
+            max_tokens=LLM_SEGMENT_MAX_TOKENS,
+            temperature=LLM_SEGMENT_TEMPERATURE,  # Plus déterministe
             stop=["<|end|>", "\n\n", "```"]
         )
 
@@ -674,14 +711,14 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         return self._parse_response(response.text, segment)
 
     def _parse_response(
-        self, 
-        response_text: str, 
+        self,
+        response_text: str,
         segment: TranscriptSegment
     ) -> Optional[ViralMomentAI]:
         """Parse la réponse du LLM avec plusieurs stratégies de fallback"""
-        
+
         response_text = response_text.strip()
-        
+
         # Stratégie 1: Parser directement si c'est du JSON
         if response_text.startswith('{'):
             try:
@@ -689,7 +726,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 return self._create_moment(data, segment)
             except json.JSONDecodeError:
                 pass
-        
+
         # Stratégie 2: Extraire le JSON du texte
         json_match = re.search(r'\{[^{}]*\}', response_text)
         if json_match:
@@ -698,7 +735,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 return self._create_moment(data, segment)
             except json.JSONDecodeError:
                 pass
-        
+
         # Stratégie 3: Extraire le score avec regex
         score_match = re.search(r'"?score"?\s*[:=]\s*([\d.]+)', response_text)
         if score_match:
@@ -708,7 +745,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 hook_match = re.search(r'"?hook"?\s*[:=]\s*"([^"]+)"', response_text)
                 emotion_match = re.search(r'"?emotion"?\s*[:=]\s*"?(\w+)"?', response_text)
                 reason_match = re.search(r'"?reason"?\s*[:=]\s*"([^"]+)"', response_text)
-                
+
                 return ViralMomentAI(
                     start_time=segment.start,
                     end_time=segment.end,
@@ -719,36 +756,39 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 )
             except (ValueError, AttributeError):
                 pass
-        
+
         # Stratégie 4: Donner un score par défaut basé sur le contenu
         # Si le LLM n'a pas pu parser mais le segment existe, on lui donne une chance
-        if len(segment.text) > 50:
+        if len(segment.text) > FALLBACK_MIN_TEXT_LENGTH:
             # Score basé sur des heuristiques simples
             text_lower = segment.text.lower()
-            base_score = 0.4
-            
+            base_score = FALLBACK_BASE_SCORE
+
             # Bonus pour certains patterns
-            if any(word in text_lower for word in ['incroyable', 'secret', 'révèle', 'découvr', 'important', 'attention']):
-                base_score += 0.15
+            if any(word in text_lower for word in [
+                'incroyable', 'secret', 'révèle',
+                'découvr', 'important', 'attention'
+            ]):
+                base_score += FALLBACK_KEYWORD_BONUS
             if any(word in text_lower for word in ['?', '!', 'pourquoi', 'comment', 'voici']):
-                base_score += 0.1
-            if len(segment.text) > 100:
-                base_score += 0.05
-                
+                base_score += FALLBACK_PUNCTUATION_BONUS
+            if len(segment.text) > FALLBACK_LENGTH_THRESHOLD:
+                base_score += FALLBACK_LENGTH_BONUS
+
             return ViralMomentAI(
                 start_time=segment.start,
                 end_time=segment.end,
-                score=min(0.7, base_score),  # Cap à 0.7 pour le fallback
-                hook=segment.text[:50] + "...",
+                score=min(FALLBACK_SCORE_CAP, base_score),  # Cap à 0.7 pour le fallback
+                hook=segment.text[:FALLBACK_HOOK_PREVIEW_LENGTH] + "...",
                 emotion="unknown",
                 reason="Score estimé (parsing LLM échoué)"
             )
-        
+
         return None
 
     def _create_moment(self, data: dict, segment: TranscriptSegment) -> ViralMomentAI:
         """Crée un ViralMomentAI à partir des données parsées"""
-        score = float(data.get("score", 0.5))
+        score = float(data.get("score", MOMENT_MIN_SCORE_THRESHOLD))
         hook = str(data.get("hook", ""))
         emotion = str(data.get("emotion", "unknown"))
         reason = str(data.get("reason", ""))
@@ -757,9 +797,9 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             start_time=segment.start,
             end_time=segment.end,
             score=min(1.0, max(0.0, score)),
-            hook=hook[:100],
-            reason=reason[:200],
-            emotion=emotion[:20]
+            hook=hook[:HOOK_DISPLAY_MAX_LENGTH],
+            reason=reason[:REASON_MAX_LENGTH],
+            emotion=emotion[:EMOTION_MAX_LENGTH]
         )
 
     def _validate_moments(
@@ -770,12 +810,12 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
     ) -> List[ViralMomentAI]:
         """
         Valide, fusionne et filtre les moments détectés.
-        
+
         Args:
             moments: Liste des moments à valider
             video_duration: Durée totale de la vidéo
             max_clips_override: Si défini, utilise cette valeur au lieu de self.max_clips
-        
+
         Améliorations:
         - Utilise self.min_viral_score au lieu d'un seuil hardcodé
         - Fusionne les moments adjacents/chevauchants
@@ -787,13 +827,13 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 
         # Trier par temps de début pour faciliter la fusion
         moments.sort(key=lambda x: x.start_time)
-        
+
         # === ÉTAPE 1: Fusion des moments adjacents/chevauchants ===
         merged = []
         for moment in moments:
             start = max(0, moment.start_time)
             end = min(video_duration, moment.end_time)
-            
+
             if not merged:
                 merged.append(ViralMomentAI(
                     start_time=start,
@@ -804,15 +844,15 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                     emotion=moment.emotion
                 ))
                 continue
-            
+
             last = merged[-1]
             # Fusionner si chevauchement > 10s ou écart < 5s
             gap = start - last.end_time
-            if gap < 5:  # Moins de 5s d'écart = fusionner
+            if gap < MERGE_GAP_SECONDS:  # Moins de 5s d'écart = fusionner
                 # Étendre le moment précédent
                 new_end = max(last.end_time, end)
                 # Limiter à max_clip_duration
-                if new_end - last.start_time <= self.max_clip_duration * 1.2:
+                if new_end - last.start_time <= self.max_clip_duration * DURATION_TOLERANCE_FACTOR:
                     last.end_time = new_end
                     # Garder le meilleur score
                     if moment.score > last.score:
@@ -820,7 +860,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                         last.hook = moment.hook
                         last.reason = moment.reason
                     continue
-            
+
             # Pas de fusion, ajouter comme nouveau moment
             merged.append(ViralMomentAI(
                 start_time=start,
@@ -830,10 +870,10 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 reason=moment.reason,
                 emotion=moment.emotion
             ))
-        
+
         # === ÉTAPE 2: Trier par score décroissant ===
         merged.sort(key=lambda x: x.score, reverse=True)
-        
+
         # === ÉTAPE 3: Filtrer par score et chevauchement ===
         valid = []
         used_ranges = []
@@ -844,11 +884,11 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
             duration = end - start
 
             # Vérifier la durée minimum
-            if duration < self.min_clip_duration * 0.5:
+            if duration < self.min_clip_duration * MIN_DURATION_FACTOR:
                 continue
-            
+
             # Tronquer si trop long
-            if duration > self.max_clip_duration * 1.2:
+            if duration > self.max_clip_duration * DURATION_TOLERANCE_FACTOR:
                 end = start + self.max_clip_duration
                 duration = end - start
 
@@ -864,10 +904,10 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 if overlap_end > overlap_start:
                     overlap_duration = overlap_end - overlap_start
                     # Rejet si > 30% de chevauchement (plus strict que 50%)
-                    if overlap_duration > duration * 0.3:
+                    if overlap_duration > duration * OVERLAP_REJECTION_RATIO:
                         overlap = True
                         break
-            
+
             if overlap:
                 continue
 
@@ -900,10 +940,10 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
 def analyze_with_ai(
     segments: List[TranscriptSegment],
     video_duration: float,
-    min_duration: float = 30.0,
-    max_duration: float = 90.0,
-    max_clips: int = 5,
-    min_viral_score: float = 0.70,
+    min_duration: float = DEFAULT_MIN_CLIP_DURATION,
+    max_duration: float = DEFAULT_MAX_CLIP_DURATION,
+    max_clips: int = DEFAULT_MAX_CLIPS,
+    min_viral_score: float = DEFAULT_MIN_VIRAL_SCORE,
     model_path: Optional[str] = None,
     video_path: Optional[str] = None,
     progress_callback: Optional[Callable[[float, str], None]] = None,
@@ -941,8 +981,8 @@ def analyze_with_ai(
             content_type=content_type
         )
         return analyzer.analyze(
-            segments, 
-            video_duration, 
+            segments,
+            video_duration,
             video_path=video_path,
             progress_callback=progress_callback
         )
@@ -965,7 +1005,7 @@ if __name__ == "__main__":
         TranscriptSegment(35, 50, "La première étape c'est de comprendre comment fonctionne l'algorithme"),
         TranscriptSegment(50, 65, "Ensuite vous devez appliquer cette technique tous les jours"),
     ]
-    
+
     moments = analyze_with_ai(test_segments, 300, min_duration=30, max_duration=60)
     for m in moments:
         print(f"[{m.start_time:.0f}s-{m.end_time:.0f}s] Score: {m.score:.2f} - {m.emotion}: {m.reason}")

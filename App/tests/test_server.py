@@ -8,6 +8,9 @@ Puis ouvre http://localhost:5555/test-video dans ton navigateur
 import sys
 from pathlib import Path
 
+# Constantes de test
+TEST_SERVER_PORT = 5555
+
 # Ajouter le dossier App au path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -32,7 +35,7 @@ if __name__ == '__main__':
     socketio.run(
         app,
         host='127.0.0.1',
-        port=5555,
+        port=TEST_SERVER_PORT,
         debug=True,
         use_reloader=False
     )

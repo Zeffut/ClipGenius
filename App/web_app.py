@@ -43,6 +43,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 # - src.ai_analyzer (TranscriptSegment, ViralMomentAI, analyze_with_ai)
 # - src.auto_config (AutoConfigurator, GeneratedConfig)
 
+# Constantes de configuration
+SOCKETIO_PING_TIMEOUT = 120          # 2 minutes avant timeout
+SOCKETIO_PING_INTERVAL = 25         # Ping toutes les 25 secondes
+SOCKETIO_MAX_BUFFER_MB = 10         # Taille max des messages HTTP en Mo
+HEARTBEAT_DEFAULT_PROGRESS = 50     # Progression par défaut du heartbeat
+DEFAULT_MAX_CLIPS = 5               # Nombre max de clips par défaut
+
 app = Flask(__name__, template_folder='web/templates')
 app.config['SECRET_KEY'] = os.urandom(24).hex()
 
@@ -53,9 +60,9 @@ socketio = SocketIO(
     app,
     cors_allowed_origins=["http://127.0.0.1:5001", "http://localhost:5001"],
     async_mode='threading',
-    ping_timeout=120,      # 2 minutes avant timeout
-    ping_interval=25,      # Ping toutes les 25 secondes
-    max_http_buffer_size=10 * 1024 * 1024  # 10MB pour gros messages
+    ping_timeout=SOCKETIO_PING_TIMEOUT,
+    ping_interval=SOCKETIO_PING_INTERVAL,
+    max_http_buffer_size=SOCKETIO_MAX_BUFFER_MB * 1024 * 1024
 )
 
 # État global des jobs
@@ -77,12 +84,12 @@ def _cleanup_old_jobs():
 def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "output", keep_user_files: bool = False):
     """
     Nettoie TOUS les fichiers résiduels générés par ClipGenius.
-    
+
     Args:
         video_path: Chemin de la vidéo source à supprimer (si non-utilisateur)
         output_dir: Dossier de sortie à nettoyer
         keep_user_files: Si True, ne supprime pas la vidéo source
-    
+
     Nettoie:
     - Vidéo source téléchargée (si non-utilisateur)
     - Fichiers temporaires MoviePy (*TEMP_MPY_*.mp4)
@@ -92,14 +99,14 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
     """
     import tempfile
     import shutil
-    
+
     # 1. Vidéo source (sauf si fichier utilisateur)
     if not keep_user_files and video_path and os.path.exists(video_path):
         try:
             os.remove(video_path)
         except Exception:
             pass
-    
+
     # 2. Fichiers temporaires (patterns)
     temp_patterns = [
         '*TEMP_MPY_*.mp4',      # Fichiers temporaires MoviePy
@@ -107,7 +114,7 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
         '*.ass',                 # Fichiers ASS temporaires
         '.sanitized_*.mp4',      # Vidéos avec audio nettoyé
     ]
-    
+
     for pattern in temp_patterns:
         # Répertoire courant
         for f in Path('.').glob(pattern):
@@ -115,14 +122,14 @@ def cleanup_residual_files(video_path: Optional[str] = None, output_dir: str = "
                 f.unlink()
             except Exception:
                 pass
-        
+
         # Dossier output
         for f in Path(output_dir).glob(pattern):
             try:
                 f.unlink()
             except Exception:
                 pass
-    
+
     # 3. Dossiers temporaires pycaps
     temp_base = Path(tempfile.gettempdir())
     for pycaps_dir in temp_base.glob('pycaps_viral_*'):
@@ -150,11 +157,11 @@ class LogCapture:
             "job_id": self.job_id
         }
         self.buffer.append(data)
-        
+
         # Émettre via WebSocket vers la room du job
         socketio.emit('progress', data, room=self.job_id)
-    
-    def heartbeat(self, step: str = "generate", progress: int = 50):
+
+    def heartbeat(self, step: str = "generate", progress: int = HEARTBEAT_DEFAULT_PROGRESS):
         """Envoie un heartbeat pour maintenir la connexion active"""
         data = {
             "timestamp": datetime.now().strftime("%H:%M:%S"),
@@ -173,7 +180,7 @@ class LogCapture:
 
 def process_video(job_id: str, url: str, options: dict):
     """Traite une vidéo YouTube ou locale en arrière-plan"""
-    
+
     # === LAZY IMPORTS (chargés ici pour démarrage rapide de Flask) ===
     from src.downloader import VideoDownloader
     from src.viral_detector import ViralMoment, ViralMomentDetector, ContentType
@@ -181,46 +188,46 @@ def process_video(job_id: str, url: str, options: dict):
     from src.subtitles import SubtitleGenerator
     from src.ai_analyzer import TranscriptSegment, analyze_with_ai
     from src.auto_config import AutoConfigurator, GeneratedConfig
-    
+
     logger = LogCapture(job_id)
     jobs[job_id] = {"status": "running", "clips": [], "error": None, "_created": time.time()}
-    
+
     video_path = None
     is_downloaded = False
     is_uploaded = False  # Pour les fichiers uploadés
     transcription_result = None  # Sera récupéré du job d'analyse si disponible
-    
+
     try:
         # Vérifier si c'est un fichier local ou une URL YouTube
         local_file = options.get('local_file')
         skip_download = options.get('skip_download', False)
-        
+
         # Si on réutilise une analyse, commencer directement à l'étape "generate"
         if skip_download and local_file:
             video_path = local_file
             is_uploaded = True
-            
+
             if not Path(video_path).exists():
                 raise Exception("Fichier introuvable")
-            
+
             # Démarrer directement à "generate" avec 5% pour initialiser la barre bleue
             logger.log("Démarrage de la génération...", "info", "generate", 5)
         elif local_file:
             # === FICHIER LOCAL (quasi instantané) ===
             video_path = local_file
             is_uploaded = True
-            
+
             if not Path(video_path).exists():
                 raise Exception("Fichier introuvable")
-            
+
             file_size_mb = Path(video_path).stat().st_size / (1024 * 1024)
             logger.log(f"Fichier: {Path(video_path).name} ({file_size_mb:.1f} MB)", "success", "download", 100)
         else:
             # === URL YOUTUBE ===
             logger.log("Initialisation du téléchargement...", "info", "download", 0)
-            
+
             downloader = VideoDownloader(output_dir="downloads")
-            
+
             # Récupérer les infos vidéo
             try:
                 logger.log("Récupération des informations...", "info", "download", 2)
@@ -232,29 +239,29 @@ def process_video(job_id: str, url: str, options: dict):
                 logger.log(f"Auteur: {info['uploader']}", "info", "download", 10)
             except Exception as e:
                 logger.log(f"Impossible de récupérer les infos: {e}", "warning", "download", 10)
-            
+
             # Callback de progression pour le téléchargement
             def download_progress(percent: int, message: str):
                 logger.log(message, "info", "download", percent)
-            
+
             video_path = downloader.download(
-                url, 
+                url,
                 quality=options.get('quality', '1080p'),
                 progress_callback=download_progress
             )
             is_downloaded = True
-            
+
             if not video_path:
                 raise Exception("Échec du téléchargement")
-            
+
             logger.log(f"Vidéo téléchargée: {Path(video_path).name}", "success", "download", 100)
 
         # === ÉTAPE 1b: Vérifier si on peut réutiliser la transcription 'base' du job d'analyse ===
         analysis_job_id = options.get('analysis_job_id')
-        
+
         if analysis_job_id and analysis_job_id in jobs:
             analysis_data = jobs[analysis_job_id].get('data', {})
-            
+
             if analysis_data and 'transcription' in analysis_data:
                 transcription_result = analysis_data['transcription'].get('result')
                 if transcription_result:
@@ -356,9 +363,9 @@ def process_video(job_id: str, url: str, options: dict):
         min_duration = options.get('min_duration', 60)
         max_duration = options.get('max_duration', 90)
         max_clips = options.get('max_clips', None)
-        
+
         moments = []
-        
+
         if options.get('use_ai', True) and transcription_result:
             # Transcription déjà faite, passer directement à l'analyse
             try:
@@ -368,7 +375,7 @@ def process_video(job_id: str, url: str, options: dict):
                     from moviepy import VideoFileClip
                     with VideoFileClip(video_path) as video:
                         video_duration = video.duration
-                    
+
                     # Analyse IA
                     logger.log("Détection des moments clés...", "info", "analyze", 10)
                     transcript_segments = [
@@ -389,7 +396,7 @@ def process_video(job_id: str, url: str, options: dict):
                         video_duration=video_duration,
                         min_duration=min_duration,
                         max_duration=max_duration,
-                        max_clips=max_clips or 5,  # Défaut réduit de 10 à 5
+                        max_clips=max_clips or DEFAULT_MAX_CLIPS,  # Défaut réduit de 10 à 5
                         min_viral_score=min_score,  # Propager le seuil utilisateur
                         video_path=video_path,
                         progress_callback=ai_progress_callback,
@@ -430,16 +437,16 @@ def process_video(job_id: str, url: str, options: dict):
                     content_type_enum = ContentType(detected_content_type)
                 except ValueError:
                     content_type_enum = ContentType.UNKNOWN
-                
+
                 detector = ViralMomentDetector(
                     min_clip_duration=min_duration,
                     max_clip_duration=max_duration,
                     min_viral_score=min_score,
-                    max_clips=max_clips,
-                    content_type=content_type_enum  # Adapter l'analyse au type de contenu
+                    max_clips=max_clips or DEFAULT_MAX_CLIPS,
+                    content_type=content_type_enum
                 )
                 moments = detector.analyze(video_path)
-                
+
                 if moments:
                     logger.log(f"Analyse audio/vidéo: {len(moments)} moments trouvés", "success", "analyze", 95)
                 else:
@@ -452,11 +459,11 @@ def process_video(job_id: str, url: str, options: dict):
             # Aucun moment trouvé - terminer gracieusement sans erreur
             logger.log("Aucun moment viral détecté dans cette vidéo", "warning", "analyze", 100)
             logger.log("La vidéo ne contient pas de moments suffisamment engageants pour créer des clips", "info", "complete", 100)
-            
+
             # Nettoyer les fichiers temporaires (sauf si fichier uploadé par l'utilisateur)
             if is_downloaded and video_path:
                 cleanup_residual_files(video_path, "output", keep_user_files=False)
-            
+
             # Marquer le job comme terminé (pas d'erreur, juste 0 clips)
             jobs[job_id] = {
                 "status": "completed",
@@ -466,21 +473,28 @@ def process_video(job_id: str, url: str, options: dict):
             }
             logger.close()
             return
-        
+
         # Afficher les moments trouvés
         for i, m in enumerate(moments, 1):
             duration = m.end_time - m.start_time
             logger.log(
-                f"Moment {i}: {m.start_time:.1f}s - {m.end_time:.1f}s ({duration:.0f}s) - Score: {m.score:.0%}", 
+                f"Moment {i}: {m.start_time:.1f}s - {m.end_time:.1f}s ({duration:.0f}s) - Score: {m.score:.0%}",
                 "info", "analyze", 92 + i
             )
-        
+
         logger.log(f"{len(moments)} moments viraux trouvés", "success", "analyze", 100)
-        
+
         # === ÉTAPE 3: Génération des clips (50-75%) ===
+        # Sécurité: limiter le nombre de clips au maximum configuré
+        effective_max_clips = max_clips or DEFAULT_MAX_CLIPS
+        if len(moments) > effective_max_clips:
+            moments.sort(key=lambda m: m.score, reverse=True)
+            moments = moments[:effective_max_clips]
+            logger.log(f"Limité à {effective_max_clips} meilleurs clips", "info", "analyze", 99)
+
         total_clips = len(moments)
         logger.log(f"Génération de {total_clips} clip(s) vertical(s)...", "info", "generate", 0)
-        
+
         output_dir = options.get('output_dir', 'output')
 
         # Créer la config avec les paramètres auto-générés si disponibles
@@ -489,7 +503,7 @@ def process_video(job_id: str, url: str, options: dict):
                 min_clip_duration=min_duration,
                 max_clip_duration=max_duration,
                 min_viral_score=min_score,
-                max_clips=max_clips,
+                max_clips=max_clips or DEFAULT_MAX_CLIPS,
                 add_subtitles=True,
                 enable_zoom_effect=True,
                 zoom_factor=auto_generated_config.zoom_factor,
@@ -507,29 +521,29 @@ def process_video(job_id: str, url: str, options: dict):
                 min_clip_duration=min_duration,
                 max_clip_duration=max_duration,
                 min_viral_score=min_score,
-                max_clips=max_clips,
+                max_clips=max_clips or DEFAULT_MAX_CLIPS,
                 add_subtitles=True,
                 enable_zoom_effect=True
             )
-        
+
         generator = ClipGenerator(config, transcription_result=transcription_result)
-        
+
         logger.log("Initialisation du générateur...", "info", "generate", 5)
-        
+
         # === HEARTBEAT THREAD pour maintenir la connexion pendant les opérations longues ===
         import threading
         heartbeat_stop = threading.Event()
-        
+
         def heartbeat_thread():
             progress = 15
             while not heartbeat_stop.is_set():
                 logger.heartbeat("generate", progress)
                 progress = min(progress + 2, 90)  # Augmente lentement jusqu'à 90%
                 heartbeat_stop.wait(10)  # Toutes les 10 secondes
-        
+
         hb_thread = threading.Thread(target=heartbeat_thread, daemon=True)
         hb_thread.start()
-        
+
         try:
             # === MODE PARALLÈLE: Générer tous les clips en même temps ===
             if config.parallel_processing and len(moments) > 1:
@@ -537,16 +551,16 @@ def process_video(job_id: str, url: str, options: dict):
                     f"Traitement parallèle activé ({config.max_parallel_clips} clips simultanés)...",
                     "info", "generate", 10
                 )
-                
+
                 # Callback pour suivre la progression
                 def progress_callback(clip_num, total, message):
                     progress = 10 + int((clip_num / total) * 85)
                     logger.log(message, "info", "generate", progress)
-                
+
                 try:
                     # Générer tous les clips en parallèle
                     clips = generator.generate_clips(video_path, output_dir, moments, start_index=1)
-                    
+
                     if clips:
                         logger.log(
                             f"{len(clips)} clips générés avec succès",
@@ -555,7 +569,7 @@ def process_video(job_id: str, url: str, options: dict):
                 except Exception as e:
                     logger.log(f"Erreur génération: {e}", "warning", "generate", 95)
                     clips = []
-            
+
             else:
                 # === MODE SÉQUENTIEL: Générer les clips un par un pour le suivi ===
                 logger.log("Génération séquentielle...", "info", "generate", 10)
@@ -601,13 +615,13 @@ def process_video(job_id: str, url: str, options: dict):
         finally:
             # Arrêter le thread heartbeat
             heartbeat_stop.set()
-        
+
         if not clips:
             raise Exception("Aucun clip généré")
-        
+
         print(f"[GÉNÉRATION OK] {len(clips)} clips générés: {clips}")  # Log serveur
         logger.log(f"{len(clips)} clips générés avec succès", "success", "generate", 100)
-        
+
         # === ÉTAPE 4: Sous-titres (maintenant intégrés dans la génération) ===
         # Les sous-titres sont ajoutés directement pendant la génération des clips
         # via le système ASS/FFmpeg dans ClipGenerator._generate_single_clip()
@@ -615,27 +629,27 @@ def process_video(job_id: str, url: str, options: dict):
             logger.log("Sous-titres ajoutés pendant la génération", "success", "subtitles", 100)
         else:
             logger.log("Sous-titres désactivés", "info", "subtitles", 100)
-        
+
         # === NOTE: Le message "complete" sera envoyé APRÈS la copie des clips ===
         # pour éviter que le frontend fetch le status avant que clip_data soit prêt
-        
+
         # === COPIE AUTOMATIQUE VERS DOSSIER TÉLÉCHARGEMENTS ===
         # Détecter le dossier Téléchargements de l'utilisateur
         home = Path.home()
         downloads_dir = home / "Downloads"
-        
+
         try:
             import shutil
-            
+
             logger.log(f"Déplacement des clips vers {downloads_dir}...", "info", "complete", 100)
-            
+
             moved_count = 0
             clips_to_delete = []  # Liste des clips à supprimer après extraction métadonnées
-            
+
             for clip_path in clips:
                 src = Path(clip_path)
                 dst = downloads_dir / src.name
-                
+
                 if src.exists():
                     # Copier vers Downloads
                     shutil.copy2(src, dst)
@@ -643,22 +657,22 @@ def process_video(job_id: str, url: str, options: dict):
                     # Marquer pour suppression après extraction métadonnées
                     clips_to_delete.append(src)
                     logger.log(f"✓ {src.name} → Téléchargements", "success", "complete", 100)
-            
+
             logger.log(f"{moved_count} clips déplacés dans Téléchargements", "success", "complete", 100)
-            
+
         except Exception as e:
             logger.log(f"Avertissement: impossible de déplacer vers Téléchargements: {e}", "warning", "complete", 100)
             clips_to_delete = []  # Ne pas supprimer si la copie a échoué
-        
+
         # Convertir les chemins en URLs relatives + extraire métadonnées
         clip_data = []
         for i, clip_path in enumerate(clips):
             try:
                 clip_file = Path(clip_path)
-                
+
                 # Les clips ont été copiés vers Downloads, chercher là-bas
                 downloads_clip = downloads_dir / clip_file.name
-                
+
                 # Vérifier que le fichier existe dans Downloads
                 if not downloads_clip.exists():
                     logger.log(f"⚠️ Clip introuvable dans Downloads: {downloads_clip}", "warning", "complete", 100)
@@ -669,7 +683,7 @@ def process_video(job_id: str, url: str, options: dict):
                     else:
                         logger.log(f"⚠️ Clip introuvable partout, skip", "warning", "complete", 100)
                         continue
-                
+
                 # Extraire les métadonnées du fichier dans Downloads
                 # Utiliser /clips/ au lieu de /output/ car on sert depuis ~/Downloads
                 metadata = {
@@ -678,7 +692,7 @@ def process_video(job_id: str, url: str, options: dict):
                     "index": i,
                     "size": round(downloads_clip.stat().st_size / (1024 * 1024), 1),  # MB
                 }
-                
+
                 # Extraire durée et score à partir du nom de fichier ou via ffprobe
                 try:
                     from moviepy import VideoFileClip
@@ -687,17 +701,17 @@ def process_video(job_id: str, url: str, options: dict):
                 except Exception as e:
                     logger.log(f"⚠️ Impossible d'extraire la durée de {downloads_clip.name}: {e}", "warning", "complete", 100)
                     metadata["duration"] = 60.0  # Valeur par défaut
-                
+
                 # Score estimé - les premiers clips ont les meilleurs scores
                 # (décroît progressivement de 0.95 à 0.80)
                 # TODO: extraire le vrai score depuis les moments viraux
                 score_range = 0.15  # 0.95 - 0.80 = 0.15
                 score_decrement = score_range / max(len(clips), 1)
                 metadata["score"] = round(0.95 - (i * score_decrement), 2)
-                
+
                 clip_data.append(metadata)
                 logger.log(f"✓ Métadonnées extraites pour {downloads_clip.name}", "info", "complete", 100)
-                
+
             except Exception as e:
                 logger.log(f"❌ Erreur extraction métadonnées pour {clip_path}: {e}", "error", "complete", 100)
                 # Ajouter quand même un objet minimal
@@ -709,21 +723,21 @@ def process_video(job_id: str, url: str, options: dict):
                     "duration": 60.0,
                     "score": 0.85
                 })
-        
+
         logger.log(f"📊 {len(clip_data)} clips prêts avec métadonnées", "success", "complete", 100)
-        
+
         # Log des URLs générées pour debug
         for i, clip in enumerate(clip_data):
             logger.log(f"  Clip {i+1}: {clip['url']} ({clip['size']} MB)", "info", "complete", 100)
-        
+
         jobs[job_id] = {"status": "completed", "clips": clip_data, "error": None, "_created": time.time()}
-        
+
         # === TERMINÉ - Envoyer APRÈS mise à jour du job ===
         # Le frontend va fetch /api/status dès réception de ce message
         # clip_data doit être prêt AVANT d'envoyer "finished"
         # NOTE: On utilise "finished" au lieu de "complete" pour distinguer du step de progression
         logger.log(f"Traitement terminé: {len(clip_data)} clips créés!", "success", "finished", 100)
-        
+
         # === NETTOYAGE IMMÉDIAT D'OUTPUT/ ===
         # Les clips sont maintenant servis depuis ~/Downloads via /clips/
         # On peut donc nettoyer output/ immédiatement
@@ -739,7 +753,7 @@ def process_video(job_id: str, url: str, options: dict):
                     pass
             if deleted_count > 0:
                 logger.log(f"✓ {deleted_count} clips supprimés d'output/", "info", "complete", 100)
-        
+
         # Nettoyer aussi les autres fichiers temporaires
         import tempfile
         temp_patterns = ['*TEMP_MPY_*.mp4', '*_sub.json', '*.ass', '.sanitized_*.mp4']
@@ -754,7 +768,7 @@ def process_video(job_id: str, url: str, options: dict):
                     f.unlink()
                 except Exception:
                     pass
-        
+
         # Nettoyer pycaps
         temp_base = Path(tempfile.gettempdir())
         for pycaps_dir in temp_base.glob('pycaps_viral_*'):
@@ -763,7 +777,7 @@ def process_video(job_id: str, url: str, options: dict):
                 shutil.rmtree(pycaps_dir, ignore_errors=True)
             except Exception:
                 pass
-        
+
         # === Supprimer la vidéo source YouTube après succès ===
         # Uniquement pour les vidéos téléchargées, pas les fichiers importés
         if is_downloaded and video_path and os.path.exists(video_path):
@@ -774,14 +788,14 @@ def process_video(job_id: str, url: str, options: dict):
                 pass
         else:
             logger.log("Vidéo source préservée", "info", "complete", 100)
-        
+
     except Exception as e:
         import traceback
         error_msg = str(e)
         logger.log(f"ERREUR: {error_msg}", "error", "error", 0)
         logger.log(traceback.format_exc(), "error", "error", 0)
         jobs[job_id] = {"status": "failed", "clips": [], "error": error_msg, "_created": time.time()}
-    
+
     finally:
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
         time.sleep(2)
@@ -800,18 +814,18 @@ def start_process():
     data = request.json
     url = data.get('url', '').strip()
     video_path = data.get('video_path', '').strip()
-    
+
     # Accepter soit une URL YouTube, soit un video_path pré-téléchargé
     if not url and not video_path:
         return jsonify({"error": "URL ou video_path requis"}), 400
-    
+
     if url and 'youtube.com' not in url and 'youtu.be' not in url:
         return jsonify({"error": "URL YouTube invalide"}), 400
-    
+
     # Générer un ID unique
     _cleanup_old_jobs()
     job_id = str(uuid.uuid4())
-    
+
     # Options
     options = {
         'quality': data.get('quality', '1080p'),
@@ -833,29 +847,29 @@ def start_process():
         'local_file': video_path if video_path else None,  # Si vidéo déjà téléchargée
         'skip_download': data.get('skip_download', False),  # Flag pour skip download
     }
-    
+
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, url, options))
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({"job_id": job_id})
 
 
 def analyze_video(job_id: str, url_or_path: str, is_local: bool):
     """Analyse une vidéo (téléchargement + transcription + auto-config uniquement)"""
-    
+
     # === LAZY IMPORTS ===
     from src.downloader import VideoDownloader
     from src.subtitles import SubtitleGenerator
     from src.auto_config import AutoConfigurator
     from moviepy import VideoFileClip
-    
+
     logger = LogCapture(job_id)
     jobs[job_id] = {"status": "running", "data": None, "error": None, "_created": time.time()}
-    
+
     video_path = None
-    
+
     try:
         # === ÉTAPE 1: Téléchargement (si YouTube) ===
         if is_local:
@@ -863,59 +877,59 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             video_path = url_or_path
             if not Path(video_path).exists():
                 raise Exception("Fichier introuvable")
-            
+
             file_size_mb = Path(video_path).stat().st_size / (1024 * 1024)
             logger.log(f"Fichier: {Path(video_path).name} ({file_size_mb:.1f} MB)", "success", "download", 100)
         else:
             # URL YouTube - téléchargement avec progression
             logger.log("Initialisation du téléchargement...", "info", "download", 0)
-            
+
             downloader = VideoDownloader(output_dir="downloads")
-            
+
             # Callback de progression
             def download_progress(percent: int, message: str):
                 logger.log(message, "info", "download", percent)
-            
+
             video_path = downloader.download(
                 url_or_path,
                 quality='1080p',
                 progress_callback=download_progress
             )
-            
+
             if not video_path:
                 raise Exception("Échec du téléchargement")
-            
+
             logger.log(f"Vidéo téléchargée: {Path(video_path).name}", "success", "download", 100)
-        
+
         # === ÉTAPE 2: Transcription Whisper ===
         logger.log("Transcription Whisper du contenu...", "info", "transcribe", 0)
-        
+
         subtitle_gen = SubtitleGenerator(model_size='base', language=None)
-        
+
         def transcription_progress(percent: int, message: str):
             logger.log(message, "info", "transcribe", percent)
-        
+
         transcription_result = subtitle_gen.transcribe_with_words(
             video_path,
             progress_callback=transcription_progress
         )
-        
+
         nb_segments = len(transcription_result.segments)
         nb_words = len(transcription_result.words)
         logger.log(f"Transcription: {nb_segments} segments, {nb_words} mots", "success", "transcribe", 100)
-        
+
         # === ÉTAPE 3: Auto-configuration ===
         logger.log("Détection du type de contenu...", "info", "detect", 0)
-        
+
         configurator = AutoConfigurator()
-        
+
         with VideoFileClip(video_path) as video:
             total_duration = video.duration
-        
+
         # Callback pour la progression de détection
         def detection_progress(percent: int, message: str):
             logger.log(message, "info", "detect", percent)
-        
+
         config, analysis = configurator.analyze_and_configure(
             video_path,
             platform='reels',
@@ -923,10 +937,10 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             transcription_result=transcription_result,
             progress_callback=detection_progress
         )
-        
+
         confidence_pct = analysis.content_confidence * 100
         logger.log(f"Configuration optimale générée", "success", "detect", 100)
-        
+
         # === RÉSULTATS ===
         result_data = {
             "success": True,
@@ -945,10 +959,10 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             },
             "video_path": video_path
         }
-        
+
         jobs[job_id] = {"status": "completed", "data": result_data, "error": None, "_created": time.time()}
         logger.log("Analyse terminée!", "success", "complete", 100)
-        
+
         # === NETTOYAGE - DÉSACTIVÉ pour la vidéo source ===
         # La vidéo doit rester disponible pour la génération de clips!
         cleanup_residual_files(
@@ -956,7 +970,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             output_dir="output",
             keep_user_files=is_local
         )
-        
+
     except Exception as e:
         import traceback
         error_msg = str(e)
@@ -964,7 +978,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
         print(f"\n❌ ERREUR ANALYSE:\n{traceback_str}")
         logger.log(f"Erreur: {error_msg}", "error", "error", 0)
         jobs[job_id] = {"status": "failed", "data": None, "error": error_msg, "_created": time.time()}
-    
+
     finally:
         # === NETTOYAGE FINAL (même en cas d'erreur) ===
         # ⚠️ NE PAS supprimer la vidéo ici car elle sera réutilisée pour la génération!
@@ -975,7 +989,7 @@ def analyze_video(job_id: str, url_or_path: str, is_local: bool):
             output_dir="output",
             keep_user_files=is_local
         )
-        
+
         # Attendre 2 secondes avant de fermer pour laisser le temps au frontend de recevoir le dernier message
         time.sleep(2)
         logger.close()
@@ -986,24 +1000,24 @@ def start_process_local():
     """Démarre le traitement d'un fichier vidéo local (chemin direct)"""
     data = request.json
     file_path = data.get('file_path', '').strip()
-    
+
     if not file_path:
         return jsonify({"error": "Chemin du fichier requis"}), 400
-    
+
     # Vérifier que le fichier existe
     if not Path(file_path).exists():
         return jsonify({"error": "Fichier introuvable"}), 400
-    
+
     # Vérifier l'extension
     allowed_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
     ext = Path(file_path).suffix.lower()
     if ext not in allowed_extensions:
         return jsonify({"error": f"Format non supporté. Utilisez: {', '.join(allowed_extensions)}"}), 400
-    
+
     # Générer un ID unique
     _cleanup_old_jobs()
     job_id = str(uuid.uuid4())
-    
+
     # Options
     options = {
         'quality': data.get('quality', '1080p'),
@@ -1025,12 +1039,12 @@ def start_process_local():
         'is_user_file': True,  # Flag pour ne pas supprimer le fichier après traitement
         'analysis_job_id': data.get('analysis_job_id'),  # Pour réutiliser la transcription de l'analyse
     }
-    
+
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, None, options))
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({"job_id": job_id})
 
 
@@ -1039,36 +1053,36 @@ def analyze_local():
     """Analyse une vidéo locale (transcription + auto-config uniquement)"""
     data = request.json
     file_path = data.get('file_path', '').strip()
-    
+
     if not file_path or not Path(file_path).exists():
         return jsonify({"error": "Fichier introuvable"}), 400
-    
+
     try:
         # === LAZY IMPORTS ===
         from src.subtitles import SubtitleGenerator
         from src.auto_config import AutoConfigurator
-        
+
         # 1. Transcription
         subtitle_gen = SubtitleGenerator(model_size='base', language=None)
         transcription_result = subtitle_gen.transcribe_with_words(file_path)
-        
+
         # 2. Auto-config avec transcription
         configurator = AutoConfigurator()
-        
+
         # Extraire premiers 180s de texte
         words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-        
+
         from moviepy import VideoFileClip
         with VideoFileClip(file_path) as video:
             total_duration = video.duration
-        
+
         config, analysis = configurator.analyze_and_configure(
             file_path,
             platform='reels',
             total_duration=total_duration,
             transcription_result=transcription_result
         )
-        
+
         # Retourner les résultats
         return jsonify({
             "success": True,
@@ -1086,7 +1100,7 @@ def analyze_local():
             },
             "video_path": file_path
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1096,41 +1110,41 @@ def analyze_youtube():
     """Analyse une vidéo YouTube (transcription + auto-config uniquement)"""
     data = request.json
     url = data.get('url', '').strip()
-    
+
     if not url:
         return jsonify({"error": "URL YouTube requise"}), 400
-    
+
     try:
         # === LAZY IMPORTS ===
         from src.downloader import VideoDownloader
         from src.subtitles import SubtitleGenerator
         from src.auto_config import AutoConfigurator
-        
+
         # 1. Télécharger
         downloader = VideoDownloader()
         video_path = downloader.download(url, quality='1080p', output_dir='output')
-        
+
         # 2. Transcription
         subtitle_gen = SubtitleGenerator(model_size='base', language=None)
         transcription_result = subtitle_gen.transcribe_with_words(video_path)
-        
+
         # 3. Auto-config avec transcription
         configurator = AutoConfigurator()
-        
+
         # Extraire premiers 180s de texte
         words_180s = [w for w in transcription_result.words if w.start <= 180.0]
-        
+
         from moviepy import VideoFileClip
         with VideoFileClip(video_path) as video:
             total_duration = video.duration
-        
+
         config, analysis = configurator.analyze_and_configure(
             video_path,
             platform='reels',
             total_duration=total_duration,
             transcription_result=transcription_result
         )
-        
+
         # Retourner les résultats
         return jsonify({
             "success": True,
@@ -1148,7 +1162,7 @@ def analyze_youtube():
             },
             "video_path": video_path
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1158,19 +1172,19 @@ def start_analyze_youtube():
     """Démarre l'analyse d'une vidéo YouTube avec SSE"""
     data = request.json
     url = data.get('url', '').strip()
-    
+
     if not url:
         return jsonify({"error": "URL YouTube requise"}), 400
-    
+
     # Générer un ID unique
     _cleanup_old_jobs()
     job_id = str(uuid.uuid4())
-    
+
     # Lancer l'analyse en arrière-plan
     thread = threading.Thread(target=analyze_video, args=(job_id, url, False))
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({"job_id": job_id})
 
 
@@ -1179,22 +1193,22 @@ def start_analyze_local():
     """Démarre l'analyse d'un fichier local avec SSE"""
     data = request.json
     file_path = data.get('file_path', '').strip()
-    
+
     if not file_path:
         return jsonify({"error": "Chemin du fichier requis"}), 400
-    
+
     if not Path(file_path).exists():
         return jsonify({"error": "Fichier introuvable"}), 400
-    
+
     # Générer un ID unique
     _cleanup_old_jobs()
     job_id = str(uuid.uuid4())
-    
+
     # Lancer l'analyse en arrière-plan
     thread = threading.Thread(target=analyze_video, args=(job_id, file_path, True))
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({"job_id": job_id})
 
 
@@ -1203,9 +1217,9 @@ def get_analyze_result(job_id: str):
     """Récupère le résultat final de l'analyse"""
     if job_id not in jobs:
         return jsonify({"error": "Job non trouvé"}), 404
-    
+
     job = jobs[job_id]
-    
+
     if job["status"] == "running":
         return jsonify({"status": "running"}), 202
     elif job["status"] == "failed":
@@ -1219,31 +1233,31 @@ def start_process_file():
     """Démarre le traitement d'un fichier vidéo uploadé"""
     if 'video' not in request.files:
         return jsonify({"error": "Fichier vidéo requis"}), 400
-    
+
     video_file = request.files['video']
     if video_file.filename == '':
         return jsonify({"error": "Aucun fichier sélectionné"}), 400
-    
+
     # Vérifier l'extension
     allowed_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.webm'}
     ext = Path(video_file.filename).suffix.lower()
     if ext not in allowed_extensions:
         return jsonify({"error": f"Format non supporté. Utilisez: {', '.join(allowed_extensions)}"}), 400
-    
+
     # Sauvegarder le fichier temporairement
     upload_dir = Path('uploads')
     upload_dir.mkdir(exist_ok=True)
-    
+
     # Nom unique pour éviter les conflits
     timestamp = int(time.time() * 1000)
     safe_filename = f"{timestamp}_{video_file.filename}"
     video_path = upload_dir / safe_filename
     video_file.save(str(video_path))
-    
+
     # Générer un ID unique
     _cleanup_old_jobs()
     job_id = str(uuid.uuid4())
-    
+
     # Options depuis FormData
     options = {
         'quality': request.form.get('quality', '1080p'),
@@ -1263,12 +1277,12 @@ def start_process_file():
         'platform': request.form.get('platform', 'reels'),
         'local_file': str(video_path),  # Chemin du fichier uploadé
     }
-    
+
     # Lancer le traitement en arrière-plan
     thread = threading.Thread(target=process_video, args=(job_id, None, options))
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({"job_id": job_id})
 
 
@@ -1291,7 +1305,7 @@ def handle_join_job(data):
     if job_id:
         join_room(job_id)
         print(f"[WebSocket] Client {request.sid} a rejoint le job {job_id}")
-        
+
         # Si le job existe déjà, envoyer l'historique des logs
         if job_id in jobs:
             job = jobs[job_id]
@@ -1322,43 +1336,42 @@ def get_status(job_id: str):
     return jsonify(result)
 
 
-
 @app.route('/api/youtube/duration/<video_id>')
 def get_youtube_duration(video_id: str):
     """Récupère la durée d'une vidéo YouTube via yt-dlp"""
     try:
         import yt_dlp
-        
+
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
             'skip_download': True
         }
-        
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
-            
+
             if info and 'duration' in info:
                 total_seconds = int(info['duration'])
                 minutes = total_seconds // 60
                 seconds = total_seconds % 60
                 hours = minutes // 60
                 minutes = minutes % 60
-                
+
                 if hours > 0:
                     duration_str = f"{hours}:{minutes:02d}:{seconds:02d}"
                 else:
                     duration_str = f"{minutes}:{seconds:02d}"
-                
+
                 return jsonify({
                     'success': True,
                     'duration': duration_str,
                     'total_seconds': total_seconds
                 })
-        
+
         return jsonify({'success': False, 'error': 'Duration not found'})
-        
+
     except Exception as e:
         print(f"Error fetching YouTube duration: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -1370,13 +1383,13 @@ def serve_output(filename: str):
     # Chemin absolu vers le dossier output
     output_dir = Path(__file__).parent / 'output'
     file_path = output_dir / filename
-    
+
     # Log pour tracer les requêtes
     if file_path.exists():
         print(f"✅ [serve_output] Fichier trouvé: {filename} ({file_path.stat().st_size} bytes)")
     else:
         print(f"❌ [serve_output] Fichier INTROUVABLE: {filename} (chemin: {file_path})")
-    
+
     # Déterminer le type MIME
     mimetype = None
     if filename.lower().endswith('.mp4'):
@@ -1385,7 +1398,7 @@ def serve_output(filename: str):
         mimetype = 'video/webm'
     elif filename.lower().endswith('.mov'):
         mimetype = 'video/quicktime'
-    
+
     # Envoyer le fichier avec support des range requests (nécessaire pour les vidéos)
     response = send_from_directory(output_dir, filename, mimetype=mimetype)
     response.headers['Accept-Ranges'] = 'bytes'
@@ -1400,18 +1413,18 @@ def serve_clips(filename: str):
     safe_name = secure_filename(filename)
     if not safe_name or safe_name != filename:
         return "Forbidden", 403
-    
+
     # N'autoriser que les fichiers vidéo
     if not filename.lower().endswith(('.mp4', '.webm', '.mov')):
         return "Forbidden", 403
-    
+
     # Déterminer le dossier Downloads selon l'OS et la langue
     downloads_dir = Path.home() / 'Downloads'
-    
+
     # Sur Mac avec locale française, le dossier peut être "Téléchargements"
     if not downloads_dir.exists():
         downloads_dir = Path.home() / 'Téléchargements'
-    
+
     # Déterminer le type MIME
     mimetype = None
     if filename.lower().endswith('.mp4'):
@@ -1420,7 +1433,7 @@ def serve_clips(filename: str):
         mimetype = 'video/webm'
     elif filename.lower().endswith('.mov'):
         mimetype = 'video/quicktime'
-    
+
     # Envoyer le fichier avec support des range requests (nécessaire pour les vidéos)
     response = send_from_directory(downloads_dir, filename, mimetype=mimetype)
     response.headers['Accept-Ranges'] = 'bytes'
@@ -1436,12 +1449,12 @@ if __name__ == '__main__':
     # Créer le dossier output
     output_path = Path('output')
     output_path.mkdir(exist_ok=True)
-    
+
     # === NETTOYAGE AU DÉMARRAGE ===
     # Supprimer tous les clips résiduels de la session précédente
     print("\n🧹 Nettoyage des fichiers résiduels...")
     cleanup_residual_files(video_path=None, output_dir="output", keep_user_files=False)
-    
+
     # === DÉSACTIVÉ: Ne plus supprimer downloads/ au démarrage ===
     # La vidéo doit rester disponible entre l'analyse et la génération
     # downloads_path = Path('downloads')
@@ -1453,13 +1466,13 @@ if __name__ == '__main__':
     #         except:
     #             pass
     print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
-    
+
     print("✅ Nettoyage terminé\n")
-    
+
     print("="*50)
     print("  ClipGenius - Interface Web")
     print("  http://localhost:5001")
     print("="*50 + "\n")
-    
+
     # Utiliser socketio.run() pour supporter WebSocket
     socketio.run(app, debug=True, host='127.0.0.1', port=5001)

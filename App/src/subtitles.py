@@ -143,7 +143,7 @@ except ImportError:
 # Import du module de sous-titres enrichis
 try:
     from .enriched_subtitles import (
-        EnrichedSubtitleProcessor, 
+        EnrichedSubtitleProcessor,
         SubtitleStyle as EnrichedSubtitleStyle,
         get_enriched_css,
         create_enriched_subtitle_template
@@ -169,22 +169,22 @@ class WordTimestamp:
     end: float
 
 
-@dataclass 
+@dataclass
 class TranscriptionResult:
     """Résultat complet d'une transcription Whisper avec word timestamps"""
     segments: List[SubtitleSegment]
     words: List[WordTimestamp]  # Tous les mots avec leurs timestamps
     language: str
-    
+
     def get_words_for_segment(self, start_time: float, end_time: float, offset: float = 0) -> List[WordTimestamp]:
         """
         Retourne les mots qui tombent dans une plage de temps donnée.
-        
+
         Args:
             start_time: Début du segment (temps absolu dans la vidéo originale)
             end_time: Fin du segment
             offset: Décalage à appliquer aux timestamps (pour les clips)
-            
+
         Returns:
             Liste de WordTimestamp avec timestamps ajustés
         """
@@ -208,14 +208,14 @@ class PreTranscribedAudioTranscriber:
     Transcriber personnalisé pour pycaps qui utilise des mots pré-transcrits.
     Évite de refaire la transcription Whisper pour chaque clip.
     """
-    
+
     def __init__(self, words: List[WordTimestamp]):
         """
         Args:
             words: Liste de mots avec leurs timestamps (relatifs au clip, pas à la vidéo originale)
         """
         self.words = words
-    
+
     def transcribe(self, audio_path: str) -> 'Document':
         """
         Retourne un Document pycaps à partir des mots pré-transcrits.
@@ -223,32 +223,32 @@ class PreTranscribedAudioTranscriber:
         """
         if not PYCAPS_AVAILABLE:
             raise ImportError("pycaps n'est pas disponible")
-        
+
         document = Document()
-        
+
         if not self.words:
             return document
-        
+
         # Créer un seul segment contenant tous les mots
         # pycaps va ensuite splitter selon la config (ex: 3 mots par segment)
         segment = Segment(time=TimeFragment(
             start=self.words[0].start if self.words else 0,
             end=self.words[-1].end if self.words else 0
         ))
-        
+
         # Créer une ligne contenant tous les mots
         line = Line()
-        
+
         for w in self.words:
             word = Word(
                 text=w.word,
                 time=TimeFragment(start=w.start, end=w.end)
             )
             line.words.add(word)  # ElementContainer utilise add() au lieu de append()
-        
+
         segment.lines.add(line)  # ElementContainer utilise add() au lieu de append()
         document.segments.add(segment)  # ElementContainer utilise add() au lieu de append()
-        
+
         return document
 
 
@@ -274,7 +274,7 @@ VIRAL_CSS = """
     color: white;
     font-weight: 700;
     /* Ombre portée douce pour profondeur */
-    text-shadow: 
+    text-shadow:
         /* Contour noir net */
         3px 3px 0px #000,
         -3px -3px 0px #000,
@@ -296,7 +296,7 @@ VIRAL_CSS = """
 .word-being-narrated {
     color: #00FF88;
     transform: scale(1.05);
-    text-shadow: 
+    text-shadow:
         /* Contour noir */
         3px 3px 0px #000,
         -3px -3px 0px #000,
@@ -401,7 +401,7 @@ class AnimatedSubtitleGenerator:
     Génère des sous-titres animés style TikTok avec pycaps
     Supporte les sous-titres enrichis avec mots-clés colorés
     """
-    
+
     def __init__(
         self,
         template: str = "viral",
@@ -421,7 +421,7 @@ class AnimatedSubtitleGenerator:
         self.language = language
         self.detected_language = None
         self.use_enriched = use_enriched or template == "enriched"
-    
+
     def add_animated_subtitles(
         self,
         video_path: str,
@@ -434,7 +434,7 @@ class AnimatedSubtitleGenerator:
     ) -> str:
         """
         Ajoute des sous-titres animés à une vidéo avec pycaps
-        
+
         Args:
             video_path: Chemin vers la vidéo source
             output_path: Chemin de sortie
@@ -443,7 +443,7 @@ class AnimatedSubtitleGenerator:
             pretranscribed_words: Mots pré-transcrits (évite de refaire Whisper)
             use_enriched: Utiliser les sous-titres enrichis (mots-clés colorés)
             custom_colors: Couleurs et styles personnalisés du preset
-            
+
         Returns:
             Chemin vers la vidéo avec sous-titres
         """
@@ -455,23 +455,27 @@ class AnimatedSubtitleGenerator:
                 shutil.copy2(video_path, output_path)
                 console.print(f"[dim]Clip copié sans sous-titres: {output_path}[/dim]")
             return output_path
-        
+
         # Déterminer si on utilise les sous-titres enrichis
         enriched = use_enriched if use_enriched is not None else self.use_enriched
-        
+
         emoji_status = "avec émojis" if use_emojis else "sans émojis"
         transcription_status = "pré-transcrit" if pretranscribed_words else "Whisper"
         enriched_status = "enrichis" if enriched else "standard"
-        console.print(f"[cyan]Ajout des sous-titres animés ({enriched_status}, {max_words} mots/segment, {emoji_status}, {transcription_status})...[/cyan]")
-        
+        console.print(
+            f"[cyan]Ajout des sous-titres animés"
+            f" ({enriched_status}, {max_words} mots/segment,"
+            f" {emoji_status}, {transcription_status})...[/cyan]"
+        )
+
         # Créer un dossier template temporaire
         temp_dir = tempfile.mkdtemp(prefix="pycaps_viral_")
         css_path = os.path.join(temp_dir, "styles.css")
         template_path = os.path.join(temp_dir, "pycaps.template.json")
-        
+
         # Variable pour capturer les erreurs du thread
         thread_error = [None]
-        
+
         def run_pycaps_pipeline():
             """Exécute le pipeline pycaps dans un thread séparé pour éviter les conflits asyncio/Playwright"""
             try:
@@ -487,7 +491,7 @@ class AnimatedSubtitleGenerator:
                 else:
                     # Template viral standard
                     template_config = VIRAL_TEMPLATE.copy()
-                    
+
                     # Ajuster le nombre de mots
                     template_config["splitters"] = [
                         {
@@ -495,37 +499,37 @@ class AnimatedSubtitleGenerator:
                             "limit": max_words
                         }
                     ]
-                    
+
                     # Désactiver les émojis si demandé
                     if not use_emojis:
                         template_config["effects"] = [
-                            e for e in template_config["effects"] 
+                            e for e in template_config["effects"]
                             if e.get("type") not in ["emoji_in_segment", "animate_segment_emojis"]
                         ]
-                    
+
                     css_content = VIRAL_CSS
-                
+
                 # Écrire le CSS
                 with open(css_path, "w", encoding="utf-8") as f:
                     f.write(css_content)
-                
+
                 # Copier la police Poppins dans le dossier temporaire
                 font_src = FONTS_DIR / "Poppins-SemiBold.ttf"
                 if font_src.exists():
                     font_dst = os.path.join(temp_dir, "Poppins-SemiBold.ttf")
                     shutil.copy2(font_src, font_dst)
-                
+
                 # Écrire le template JSON
                 with open(template_path, "w", encoding="utf-8") as f:
                     json.dump(template_config, f, indent=2)
-                
+
                 # Charger le template et construire le pipeline
                 loader = TemplateLoader(temp_dir)
                 loader.with_input_video(video_path)
-                
+
                 # Obtenir le builder pour personnaliser
                 builder = loader.load(should_build_pipeline=False)
-                
+
                 # Utiliser le transcriber pré-transcrit ou Whisper
                 if pretranscribed_words:
                     # Utiliser notre transcriber personnalisé
@@ -537,34 +541,37 @@ class AnimatedSubtitleGenerator:
                         language=self.language,
                         model_size=self.whisper_model
                     )
-                
+
                 # Définir la sortie
                 builder.with_output_video(output_path)
-                
+
                 # Construire et exécuter le pipeline
                 pipeline = builder.build()
                 pipeline.run()
-                
+
             except Exception as e:
                 thread_error[0] = e
-        
+
         try:
             # Exécuter pycaps dans un thread séparé pour éviter:
             # "Playwright Sync API inside asyncio loop" error
             thread = threading.Thread(target=run_pycaps_pipeline)
             thread.start()
             thread.join(timeout=300)  # Timeout de 5 minutes
-            
+
             if thread.is_alive():
-                console.print("[yellow]⚠ Timeout du thread pycaps (5min), la vidéo sera retournée sans sous-titres[/yellow]")
-            
+                console.print(
+                    "[yellow]⚠ Timeout du thread pycaps (5min),"
+                    " la vidéo sera retournée sans sous-titres[/yellow]"
+                )
+
             # Vérifier si une erreur s'est produite dans le thread
             if not thread.is_alive() and thread_error[0]:
                 raise thread_error[0]
-            
+
             console.print(f"[green]Sous-titres animés ajoutés![/green]")
             return output_path
-            
+
         except Exception as e:
             console.print(f"[red]Erreur pycaps: {e}[/red]")
             import traceback
@@ -574,12 +581,12 @@ class AnimatedSubtitleGenerator:
             if not os.path.exists(output_path):
                 shutil.copy2(video_path, output_path)
             return output_path
-            
+
         finally:
             # Forcer le garbage collection pour libérer les handles de fichiers
             gc.collect()
             time.sleep(0.5)  # Petit délai pour laisser Windows libérer les fichiers
-            
+
             # Nettoyer le dossier temporaire
             try:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -601,7 +608,7 @@ def add_animated_subtitles(
 ) -> str:
     """
     Fonction utilitaire pour ajouter des sous-titres animés à une vidéo
-    
+
     Args:
         video_path: Chemin vers la vidéo
         output_path: Chemin de sortie (auto-généré si non fourni)
@@ -613,24 +620,24 @@ def add_animated_subtitles(
         pretranscribed_words: Mots pré-transcrits avec timestamps (évite de refaire Whisper)
         use_enriched: Utiliser les sous-titres enrichis avec mots-clés colorés (défaut: False)
         custom_colors: Couleurs et styles personnalisés du preset
-        
+
     Returns:
         Chemin vers la vidéo avec sous-titres
     """
     if output_path is None:
         path = Path(video_path)
         output_path = str(path.parent / f"{path.stem}_captioned{path.suffix}")
-    
+
     generator = AnimatedSubtitleGenerator(
         template=template,
         whisper_model=whisper_model,
         language=language,
         use_enriched=use_enriched or template == "enriched"
     )
-    
+
     return generator.add_animated_subtitles(
-        video_path, output_path, 
-        max_words=max_words, 
+        video_path, output_path,
+        max_words=max_words,
         use_emojis=use_emojis,
         pretranscribed_words=pretranscribed_words,
         use_enriched=use_enriched,
@@ -663,7 +670,7 @@ class SubtitleGenerator:
     Wrapper de compatibilité qui utilise pycaps en interne
     Conserve l'interface de l'ancien code pour ne rien casser
     """
-    
+
     def __init__(
         self,
         model_size: str = "base",
@@ -679,7 +686,7 @@ class SubtitleGenerator:
             whisper_model=model_size,
             language=language
         )
-    
+
     def transcribe(self, video_path: str) -> List[SubtitleSegment]:
         """
         Transcrit l'audio (compatibilité - utilise Whisper directement)
@@ -687,7 +694,7 @@ class SubtitleGenerator:
         """
         result = self.transcribe_with_words(video_path)
         return result.segments
-    
+
     def transcribe_with_words(
         self,
         video_path: str,
@@ -785,7 +792,7 @@ class SubtitleGenerator:
             try:
                 # Capturer stderr où tqdm affiche la progression
                 stderr_capture = io.StringIO()
-                
+
                 # Créer un wrapper qui capture stderr ET l'affiche dans la console
                 class TeeStderr:
                     def __init__(self, *streams):
@@ -804,12 +811,12 @@ class SubtitleGenerator:
                 # Rediriger stderr vers notre wrapper
                 old_stderr = sys.stderr
                 sys.stderr = TeeStderr(stderr_capture, old_stderr)
-                
+
                 try:
                     transcription_result[0] = mlx_whisper.transcribe(video_path, **transcribe_options)
                 finally:
                     sys.stderr = old_stderr
-                    
+
             except Exception as e:
                 transcription_error[0] = e
 
@@ -822,23 +829,23 @@ class SubtitleGenerator:
 
         while transcription_thread.is_alive():
             whisper_pct = current_whisper_progress[0]
-            
+
             # Envoyer directement le pourcentage Whisper (0-100)
             # Le mapping vers la plage globale sera fait par web_app.py
-            
+
             # Ignorer les sauts suspects (bug tqdm qui affiche 100% au début)
             # Si on passe directement de 0% à >50%, c'est probablement un bug
             if not first_progress_received and whisper_pct > 50:
                 # Premier message et déjà >50% ? Ignorer, c'est un bug tqdm
                 continue
-            
+
             if whisper_pct > 0:
                 first_progress_received = True
-            
+
             # Plafonner à 99% pendant le traitement (100% réservé pour la fin)
             if whisper_pct >= 100:
                 whisper_pct = 99
-            
+
             # Envoyer la progression si elle a changé d'au moins 2%
             if whisper_pct >= last_reported_whisper_progress + 2 and whisper_pct > 0:
                 report_progress(whisper_pct, f"Transcription {whisper_pct}%")
@@ -905,7 +912,7 @@ class SubtitleGenerator:
             try:
                 # Capturer stderr où tqdm affiche la progression
                 stderr_capture = io.StringIO()
-                
+
                 # Créer un wrapper qui capture stderr ET l'affiche dans la console
                 class TeeStderr:
                     def __init__(self, *streams):
@@ -924,12 +931,12 @@ class SubtitleGenerator:
                 # Rediriger stderr vers notre wrapper
                 old_stderr = sys.stderr
                 sys.stderr = TeeStderr(stderr_capture, old_stderr)
-                
+
                 try:
                     transcription_result[0] = model.transcribe(video_path, **transcribe_options)
                 finally:
                     sys.stderr = old_stderr
-                    
+
             except Exception as e:
                 transcription_error[0] = e
 
@@ -941,10 +948,10 @@ class SubtitleGenerator:
 
         while transcription_thread.is_alive():
             whisper_pct = current_whisper_progress[0]
-            
+
             # Mapper la progression Whisper (0-100%) vers la plage analyze (25-85%)
             analyze_progress = 25 + int(whisper_pct * 0.6)  # 0-100 -> 25-85
-            
+
             # Envoyer la progression si elle a changé d'au moins 2%
             if whisper_pct >= last_reported_whisper_progress + 2:
                 report_progress(analyze_progress, f"Transcription {whisper_pct}%")
@@ -1004,7 +1011,7 @@ class SubtitleGenerator:
             words=all_words,
             language=self.detected_language
         )
-    
+
     def add_subtitles_to_video(
         self,
         video_path: str,

@@ -161,32 +161,32 @@ try:
         capture_output=True,
         text=True
     )
-    
+
     if result.returncode != 0:
         print("❌ Erreur lors du build:")
         print(result.stderr)
         sys.exit(1)
-    
+
     print("✓ Build terminé")
-    
+
     # Vérifier que l'app existe
     app_path = Path('dist/ClipGenius.app')
     if app_path.exists():
         print(f"\n✅ Application créée avec succès!")
         print(f"   Chemin: {app_path.absolute()}")
         print(f"   Taille: {sum(f.stat().st_size for f in app_path.rglob('*') if f.is_file()) / (1024*1024):.1f} MB")
-        
+
         print("\n📦 Prochaines étapes:")
         print("   1. Tester l'app: open dist/ClipGenius.app")
         print("   2. Déplacer vers /Applications:")
         print("      cp -r dist/ClipGenius.app /Applications/")
         print("   3. Créer un DMG pour distribution:")
         print("      hdiutil create -volname ClipGenius -srcfolder dist/ClipGenius.app -ov -format UDZO ClipGenius.dmg")
-        
+
     else:
         print("❌ L'application n'a pas été créée")
         sys.exit(1)
-        
+
 except Exception as e:
     print(f"❌ Erreur: {e}")
     import traceback

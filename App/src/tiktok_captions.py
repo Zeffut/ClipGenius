@@ -11,6 +11,16 @@ from rich.console import Console
 
 console = Console()
 
+# Constantes de configuration
+SHADOW_ALPHA = 128  # Opacité de l'ombre (0=transparent, 255=opaque)
+STYLE_SCALE_PERCENT = 100.0  # Échelle par défaut (x et y) en pourcentage
+STYLE_LETTER_SPACING = 0.5  # Espacement entre les lettres
+MARGIN_HORIZONTAL = 10  # Marge horizontale gauche/droite
+MARGIN_VERTICAL = 50  # Marge verticale depuis le bas
+NUMBER_SIZE_MULTIPLIER = 1.12  # Multiplicateur de taille pour les nombres
+MS_PER_SECOND = 1000  # Millisecondes par seconde
+CS_PER_SECOND = 100  # Centisecondes par seconde
+
 # Import du module de classification des mots
 try:
     from .enriched_subtitles import EnrichedSubtitleProcessor, SubtitleStyle as EnrichedSubtitleStyle
@@ -22,10 +32,10 @@ except ImportError:
 def rgb_to_ass_color(hex_color: str) -> str:
     """
     Convertit une couleur RGB hex (#RRGGBB) en couleur ASS (&H00BBGGRR).
-    
+
     Args:
         hex_color: Couleur en hex RGB (ex: #FF0000)
-    
+
     Returns:
         Couleur au format ASS &H00BBGGRR (sans & final pour pysubs2)
     """
@@ -47,7 +57,7 @@ def create_ass_style(
 ) -> pysubs2.SSAStyle:
     """
     Crée un style ASS pour les sous-titres.
-    
+
     Args:
         name: Nom du style
         font_size: Taille de la police
@@ -57,34 +67,34 @@ def create_ass_style(
         border_width: Épaisseur du contour
         shadow_depth: Profondeur de l'ombre
         alignment: Position (1-9, numpad style)
-    
+
     Returns:
         SSAStyle configuré
     """
     ass_color = rgb_to_ass_color(primary_color)
-    
+
     return pysubs2.SSAStyle(
         fontname=font_name,
         fontsize=font_size,
         primarycolor=ass_color,
         secondarycolor=ass_color,
         outlinecolor=pysubs2.Color(0, 0, 0),  # Noir pour le contour
-        backcolor=pysubs2.Color(0, 0, 0, 128),  # Noir semi-transparent pour l'ombre
+        backcolor=pysubs2.Color(0, 0, 0, SHADOW_ALPHA),  # Noir semi-transparent pour l'ombre
         bold=bold,
         italic=False,
         underline=False,
         strikeout=False,
-        scalex=100.0,
-        scaley=100.0,
-        spacing=0.5,
+        scalex=STYLE_SCALE_PERCENT,
+        scaley=STYLE_SCALE_PERCENT,
+        spacing=STYLE_LETTER_SPACING,
         angle=0.0,
         borderstyle=1,
         outline=border_width,
         shadow=shadow_depth,
         alignment=alignment,
-        marginl=10,
-        marginr=10,
-        marginv=50  # Marge verticale depuis le bas
+        marginl=MARGIN_HORIZONTAL,
+        marginr=MARGIN_HORIZONTAL,
+        marginv=MARGIN_VERTICAL  # Marge verticale depuis le bas
     )
 
 
@@ -96,26 +106,26 @@ def generate_tiktok_ass(
 ) -> Optional[str]:
     """
     Génère un fichier ASS avec sous-titres style TikTok.
-    
+
     Args:
         words: Liste de WordTimestamp avec timestamps
         preset_colors: Dictionnaire de couleurs du preset (keyword_color, number_color, etc.)
         output_path: Chemin de sortie du fichier .ass
         style_config: Configuration additionnelle (theme, max_words, use_emojis)
-        
+
     Returns:
         Chemin du fichier .ass généré
     """
     if not words:
         console.print("[yellow]⚠ Aucun mot à sous-titrer[/yellow]")
         return None
-    
+
     # Configuration par défaut
     config = style_config or {}
     theme = config.get('theme', 'viral')
     max_words = config.get('max_words', 3)
     use_emojis = config.get('use_emojis', True)
-    
+
     # Couleurs par défaut (TikTok viral style)
     colors = preset_colors or {}
     primary_color = colors.get('primary_color', '#FFFFFF')
@@ -123,17 +133,17 @@ def generate_tiktok_ass(
     number_color = colors.get('number_color', '#00FFFF')
     emphasis_color = colors.get('emphasis_color', '#FF6B6B')
     highlight_color = colors.get('highlight_color', '#00FF88')
-    
+
     # Configuration de police
     font_name = colors.get('font_family', 'Poppins')
     base_font_size = colors.get('base_font_size', 90)  # Taille augmentée pour 1920px
     keyword_size_mult = colors.get('keyword_size_multiplier', 1.18)
-    
+
     # Créer le fichier ASS
     subs = pysubs2.SSAFile()
     subs.info["PlayResX"] = "1080"  # Résolution 9:16
     subs.info["PlayResY"] = "1920"
-    
+
     # Créer les styles pour chaque type de mot
     subs.styles["Normal"] = create_ass_style(
         name="Normal",
@@ -141,7 +151,7 @@ def generate_tiktok_ass(
         primary_color=primary_color,
         font_name=font_name
     )
-    
+
     subs.styles["Keyword"] = create_ass_style(
         name="Keyword",
         font_size=int(base_font_size * keyword_size_mult),
@@ -149,15 +159,15 @@ def generate_tiktok_ass(
         font_name=font_name,
         bold=True
     )
-    
+
     subs.styles["Number"] = create_ass_style(
         name="Number",
-        font_size=int(base_font_size * 1.12),
+        font_size=int(base_font_size * NUMBER_SIZE_MULTIPLIER),
         primary_color=number_color,
         font_name=font_name,
         bold=True
     )
-    
+
     subs.styles["Emphasis"] = create_ass_style(
         name="Emphasis",
         font_size=base_font_size,
@@ -165,7 +175,7 @@ def generate_tiktok_ass(
         font_name=font_name,
         bold=True
     )
-    
+
     subs.styles["Highlight"] = create_ass_style(
         name="Highlight",
         font_size=base_font_size,
@@ -173,7 +183,7 @@ def generate_tiktok_ass(
         font_name=font_name,
         bold=True
     )
-    
+
     # Classifier les mots avec enriched_subtitles si disponible
     if ENRICHED_AVAILABLE and colors:
         # Créer le style enrichi avec les couleurs du preset
@@ -185,16 +195,16 @@ def generate_tiktok_ass(
         enriched_style.highlight_color = highlight_color
         enriched_style.base_font_size = base_font_size
         enriched_style.keyword_size_multiplier = keyword_size_mult
-        
+
         processor = EnrichedSubtitleProcessor(style=enriched_style)
-        
+
         # Convertir les mots en format dict pour le processeur
         words_dict = [{'word': w.word, 'start': w.start, 'end': w.end} for w in words]
         enriched_words = processor.process_words(words_dict)
     else:
         # Fallback: tous les mots en normal
         from dataclasses import dataclass
-        
+
         @dataclass
         class SimpleEnrichedWord:
             word: str
@@ -204,7 +214,7 @@ def generate_tiktok_ass(
             color: str = '#FFFFFF'
             size_multiplier: float = 1.0
             animation: Optional[str] = None
-        
+
         enriched_words = [
             SimpleEnrichedWord(
                 word=w.word,
@@ -215,38 +225,38 @@ def generate_tiktok_ass(
             )
             for w in words
         ]
-    
+
     # Grouper les mots en segments (max_words mots par segment)
     segments = []
     current_segment = []
-    
+
     for enriched_word in enriched_words:
         current_segment.append(enriched_word)
-        
+
         if len(current_segment) >= max_words:
             segments.append(current_segment)
             current_segment = []
-    
+
     # Ajouter le dernier segment s'il reste des mots
     if current_segment:
         segments.append(current_segment)
-    
+
     # Générer les événements ASS pour chaque segment
     for segment_words in segments:
         if not segment_words:
             continue
-        
+
         # Timing du segment (du premier au dernier mot)
-        start_time = int(segment_words[0].start * 1000)  # Millisecondes
-        end_time = int(segment_words[-1].end * 1000)
-        
+        start_time = int(segment_words[0].start * MS_PER_SECOND)  # Millisecondes
+        end_time = int(segment_words[-1].end * MS_PER_SECOND)
+
         # Construire le texte du segment avec styles inline
         segment_text_parts = []
-        
+
         for i, word in enumerate(segment_words):
             # Déterminer le style selon l'importance
             importance = word.importance
-            
+
             # Mapper l'importance vers le nom de style
             style_map = {
                 'keyword': 'Keyword',
@@ -255,29 +265,29 @@ def generate_tiktok_ass(
                 'normal': 'Normal'
             }
             style_name = style_map.get(importance, 'Normal')
-            
+
             # Texte du mot (avec espaces)
             word_text = word.word
             if i < len(segment_words) - 1:
                 word_text += " "
-            
+
             # Animation karaoke + pop-in pour les mots importants
             if importance in ['keyword', 'number']:
                 # Effet pop-in: scale de 120% puis retour à 100%
                 # Karaoke: highlight progressif
                 # Format: {\k<duration>\t(\fscx120\fscy120)\t(\fscx100\fscy100)}
-                word_duration = int((word.end - word.start) * 100)  # Centisecondes
+                word_duration = int((word.end - word.start) * CS_PER_SECOND)  # Centisecondes
                 word_text = f"{{\\k{word_duration}\\t(\\fscx120\\fscy120)\\t(\\fscx100\\fscy100)}}{word_text}"
             else:
                 # Effet karaoke simple
-                word_duration = int((word.end - word.start) * 100)
+                word_duration = int((word.end - word.start) * CS_PER_SECOND)
                 word_text = f"{{\\k{word_duration}}}{word_text}"
-            
+
             segment_text_parts.append(word_text)
-        
+
         # Joindre tous les mots
         segment_text = "".join(segment_text_parts)
-        
+
         # Ajouter le style par défaut du segment (Normal)
         # Les overrides inline changeront le style de mots spécifiques
         event = pysubs2.SSAEvent(
@@ -286,26 +296,26 @@ def generate_tiktok_ass(
             text=segment_text,
             style="Normal"
         )
-        
+
         subs.events.append(event)
-    
+
     # Sauvegarder le fichier ASS
     subs.save(output_path)
     console.print(f"[green]✓ Fichier ASS généré: {Path(output_path).name} ({len(subs.events)} segments)[/green]")
-    
+
     return output_path
 
 
 if __name__ == "__main__":
     # Test du module
     from dataclasses import dataclass
-    
+
     @dataclass
     class TestWord:
         word: str
         start: float
         end: float
-    
+
     test_words = [
         TestWord("Incroyable", 0.0, 0.5),
         TestWord("découverte", 0.5, 1.0),
@@ -317,14 +327,14 @@ if __name__ == "__main__":
         TestWord("pas", 2.3, 2.5),
         TestWord("ça", 2.5, 2.7),
     ]
-    
+
     test_colors = {
         'primary_color': '#FFFFFF',
         'keyword_color': '#FF00FF',
         'number_color': '#00FFFF',
         'emphasis_color': '#FF6B6B'
     }
-    
+
     output = "/tmp/test_tiktok.ass"
     generate_tiktok_ass(
         words=test_words,
@@ -332,5 +342,5 @@ if __name__ == "__main__":
         output_path=output,
         style_config={'theme': 'gaming', 'max_words': 3, 'use_emojis': False}
     )
-    
+
     print(f"Fichier test généré: {output}")

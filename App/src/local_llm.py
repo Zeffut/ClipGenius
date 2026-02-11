@@ -39,11 +39,46 @@ MODEL_DOWNLOADS = {
     },
 }
 
+# Constantes de configuration
 
-def get_optimal_context_size(max_ram_usage_percent: float = 50.0) -> int:
+# Pourcentage maximum de RAM système à allouer au LLM
+MAX_RAM_USAGE_PERCENT: float = 50.0
+
+# Seuils de RAM (en GB) pour déterminer la taille de contexte optimale
+RAM_THRESHOLD_64K: float = 18.0
+RAM_THRESHOLD_32K: float = 10.0
+RAM_THRESHOLD_16K: float = 6.0
+RAM_THRESHOLD_8K: float = 4.0
+RAM_THRESHOLD_4K: float = 3.0
+
+# Tailles de contexte en tokens (puissances de 2)
+CONTEXT_SIZE_64K: int = 65536
+CONTEXT_SIZE_32K: int = 32768
+CONTEXT_SIZE_16K: int = 16384
+CONTEXT_SIZE_8K: int = 8192
+CONTEXT_SIZE_4K: int = 4096
+CONTEXT_SIZE_2K: int = 2048
+
+# Paramètres CPU
+MAX_CPU_THREADS: int = 8
+FALLBACK_CPU_COUNT: int = 4
+
+# Estimation RAM du modèle (en GB, pour Phi-4-mini Q4_K_M)
+MODEL_BASE_RAM_GB: float = 2.3
+RAM_FORMULA_SCALE_FACTOR: float = 2.5
+
+# Tailles de batch selon la plateforme
+METAL_BATCH_SIZE: int = 512
+CPU_BATCH_SIZE: int = 256
+
+# Timeout de téléchargement (en secondes)
+DOWNLOAD_TIMEOUT: int = 30
+
+
+def get_optimal_context_size(max_ram_usage_percent: float = MAX_RAM_USAGE_PERCENT) -> int:
     """
     Calcule la taille de contexte optimale selon la RAM disponible.
-    
+
     Formule approximative de consommation RAM pour Phi-4-mini (Q4_K_M quantization):
     - Base (modèle): ~2.3 GB
     - Contexte 4K: ~0.5 GB
@@ -51,53 +86,53 @@ def get_optimal_context_size(max_ram_usage_percent: float = 50.0) -> int:
     - Contexte 16K: ~2.5 GB
     - Contexte 32K: ~6.0 GB
     - Contexte 64K: ~14.0 GB
-    
+
     Args:
         max_ram_usage_percent: % de RAM système à utiliser au maximum (défaut: 50%)
-    
+
     Returns:
         Taille de contexte optimale (puissance de 2: 2048, 4096, 8192, 16384, 32768, 65536)
     """
     try:
         import psutil
-        
+
         # RAM totale du système
         total_ram_gb = psutil.virtual_memory().total / (1024**3)
-        
+
         # RAM disponible pour le LLM (50% par défaut)
         available_for_llm = total_ram_gb * (max_ram_usage_percent / 100.0)
-        
+
         # Estimer la taille de contexte selon la RAM disponible
         # Formule: RAM_ctx = 0.5 + (n_ctx / 4096) * 1.5 GB
         # Résolution: n_ctx = ((RAM_ctx - 0.5) / 1.5) * 4096
-        
-        if available_for_llm >= 18.0:
+
+        if available_for_llm >= RAM_THRESHOLD_64K:
             # 18+ GB → 64K tokens
-            return 65536
-        elif available_for_llm >= 10.0:
+            return CONTEXT_SIZE_64K
+        elif available_for_llm >= RAM_THRESHOLD_32K:
             # 10-18 GB → 32K tokens
-            return 32768
-        elif available_for_llm >= 6.0:
+            return CONTEXT_SIZE_32K
+        elif available_for_llm >= RAM_THRESHOLD_16K:
             # 6-10 GB → 16K tokens
-            return 16384
-        elif available_for_llm >= 4.0:
+            return CONTEXT_SIZE_16K
+        elif available_for_llm >= RAM_THRESHOLD_8K:
             # 4-6 GB → 8K tokens
-            return 8192
-        elif available_for_llm >= 3.0:
+            return CONTEXT_SIZE_8K
+        elif available_for_llm >= RAM_THRESHOLD_4K:
             # 3-4 GB → 4K tokens
-            return 4096
+            return CONTEXT_SIZE_4K
         else:
             # < 3 GB → 2K tokens (minimal)
-            return 2048
-            
+            return CONTEXT_SIZE_2K
+
     except ImportError:
         # Si psutil n'est pas installé, utiliser une valeur conservatrice
         console.print("[yellow]⚠ psutil non installé, contexte par défaut: 8192[/yellow]")
         console.print("[dim]Installe psutil pour optimisation automatique: pip install psutil[/dim]")
-        return 8192
+        return CONTEXT_SIZE_8K
     except Exception as e:
         console.print(f"[yellow]⚠ Erreur détection RAM: {e}, contexte par défaut: 8192[/yellow]")
-        return 8192
+        return CONTEXT_SIZE_8K
 
 
 @contextmanager
@@ -110,7 +145,7 @@ def suppress_stderr():
     # Sauvegarder le stderr original
     stderr_fd = sys.stderr.fileno()
     saved_stderr = os.dup(stderr_fd)
-    
+
     try:
         # Rediriger stderr vers /dev/null
         devnull = os.open(os.devnull, os.O_WRONLY)
@@ -187,7 +222,7 @@ class LocalLLM:
 
         # Nombre de threads
         if n_threads is None:
-            n_threads = min(8, (os.cpu_count() or 4) - 1)
+            n_threads = min(MAX_CPU_THREADS, (os.cpu_count() or FALLBACK_CPU_COUNT) - 1)
 
         # Charger le modèle
         # Détecter le type de modèle pour afficher le bon message
@@ -195,21 +230,21 @@ class LocalLLM:
         if 'phi-4' in model_name or 'phi4' in model_name:
             model_display = "Phi-4-mini"
             # 🚀 Optimisation: Contexte dynamique selon RAM disponible
-            n_ctx = get_optimal_context_size(max_ram_usage_percent=50.0)
+            n_ctx = get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT)
         else:
             model_display = "Phi-3-mini"
             # Phi-3 a un contexte max de 4K, limiter à 2K pour sécurité
-            n_ctx = min(2048, get_optimal_context_size(max_ram_usage_percent=50.0))
-        
+            n_ctx = min(CONTEXT_SIZE_2K, get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT))
+
         console.print(f"[cyan]Chargement de {model_display} local...[/cyan]")
         console.print(f"[dim]Modèle: {Path(model_path).name}[/dim]")
         console.print(f"[dim]Threads: {n_threads}, Contexte: {n_ctx} tokens[/dim]")
-        
+
         # Afficher estimation RAM
         try:
             import psutil
             total_ram_gb = psutil.virtual_memory().total / (1024**3)
-            estimated_ram_gb = 2.3 + (n_ctx / 4096) * 2.5  # Formule approximative
+            estimated_ram_gb = MODEL_BASE_RAM_GB + (n_ctx / CONTEXT_SIZE_4K) * RAM_FORMULA_SCALE_FACTOR  # Formule approximative
             console.print(f"[dim]RAM système: {total_ram_gb:.1f} GB, Estimée LLM: ~{estimated_ram_gb:.1f} GB[/dim]")
         except Exception:
             pass
@@ -217,21 +252,21 @@ class LocalLLM:
         # Détecter si on est sur Mac (Apple Silicon) pour activer Metal
         import platform
         is_apple_silicon = (
-            platform.system() == "Darwin" and 
+            platform.system() == "Darwin" and
             platform.machine() == "arm64"
         )
-        
+
         # Configuration optimale selon la plateforme
         if is_apple_silicon:
             n_gpu_layers = -1  # -1 = charger TOUTES les couches sur Metal
-            n_batch = 512      # Batch plus grand pour Metal (meilleure perf)
+            n_batch = METAL_BATCH_SIZE      # Batch plus grand pour Metal (meilleure perf)
             use_mlock = True   # Verrouiller en RAM pour éviter le swap
             console.print(f"[green]Accélération Metal détectée (Apple Silicon)[/green]")
         else:
             n_gpu_layers = 0   # CPU uniquement sur les autres plateformes
-            n_batch = 256
+            n_batch = CPU_BATCH_SIZE
             use_mlock = False
-        
+
         try:
             # Utiliser suppress_stderr pour masquer les warnings ggml_metal bf16
             # Ces warnings viennent du backend C++ et ne sont pas critiques
@@ -248,7 +283,7 @@ class LocalLLM:
                     use_mmap=True,            # Memory mapping pour chargement rapide
                     use_mlock=use_mlock,      # Verrouiller en RAM (Mac uniquement)
                 )
-            
+
             if is_apple_silicon:
                 console.print(f"[green]✓ {model_display} chargé avec Metal (GPU)[/green]")
             else:
@@ -263,29 +298,29 @@ class LocalLLM:
         """
         Retourne la taille du contexte actuellement chargé.
         Utile pour adapter les seuils dans ai_analyzer.
-        
+
         Returns:
             Taille du contexte en tokens (ex: 4096, 16384, 32768)
         """
         if LocalLLM._llm is None:
             # Si modèle pas encore chargé, estimer selon RAM
-            return get_optimal_context_size(max_ram_usage_percent=50.0)
-        
+            return get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT)
+
         try:
             # Accéder au contexte du modèle chargé
             return LocalLLM._llm.n_ctx()
         except Exception:
             # Fallback: estimer selon RAM
-            return get_optimal_context_size(max_ram_usage_percent=50.0)
+            return get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT)
 
     @staticmethod
     def _download_model(model_key: str = "phi-4-mini") -> Optional[str]:
         """
         Télécharge automatiquement le modèle GGUF depuis HuggingFace.
-        
+
         Args:
             model_key: Clé du modèle à télécharger ("phi-4-mini" ou "phi-3-mini")
-            
+
         Returns:
             Chemin vers le modèle téléchargé, ou None si échec
         """
@@ -293,43 +328,43 @@ class LocalLLM:
         import urllib.error
         import shutil
         from rich.progress import Progress, DownloadColumn, TransferSpeedColumn, BarColumn, TextColumn
-        
+
         if model_key not in MODEL_DOWNLOADS:
             console.print(f"[red]Modèle inconnu: {model_key}[/red]")
             return None
-        
+
         model_info = MODEL_DOWNLOADS[model_key]
         url = model_info["url"]
         filename = model_info["filename"]
         size_gb = model_info["size_gb"]
-        
+
         # Dossier de destination: App/models/ (chemin absolu basé sur ce fichier)
         # __file__ = App/src/local_llm.py → parent.parent = App/
         app_dir = Path(__file__).resolve().parent.parent
         models_dir = app_dir / "models"
         models_dir.mkdir(exist_ok=True)
-        
+
         dest_path = models_dir / filename
-        
+
         # Si le fichier existe déjà, le retourner
         if dest_path.exists():
             console.print(f"[dim]Modèle déjà présent: {dest_path}[/dim]")
             return str(dest_path)
-        
+
         console.print(f"\n[bold cyan]📥 Téléchargement de {filename}...[/bold cyan]")
         console.print(f"[dim]Source: {url}[/dim]")
         console.print(f"[dim]Taille: ~{size_gb} GB[/dim]")
         console.print(f"[dim]Destination: {dest_path}[/dim]\n")
-        
+
         temp_path = dest_path.with_suffix(".tmp")
-        
+
         try:
             # Ouvrir la connexion pour obtenir la taille totale
             req = urllib.request.Request(url, headers={"User-Agent": "ClipGenius/1.0"})
-            
-            with urllib.request.urlopen(req, timeout=30) as response:
+
+            with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT) as response:
                 total_size = int(response.headers.get("Content-Length", 0))
-                
+
                 with Progress(
                     TextColumn("[bold blue]{task.description}"),
                     BarColumn(),
@@ -337,11 +372,11 @@ class LocalLLM:
                     TransferSpeedColumn(),
                 ) as progress:
                     task = progress.add_task(f"Téléchargement", total=total_size)
-                    
+
                     with open(temp_path, "wb") as f:
                         downloaded = 0
                         chunk_size = 1024 * 1024  # 1 MB chunks
-                        
+
                         while True:
                             chunk = response.read(chunk_size)
                             if not chunk:
@@ -349,13 +384,13 @@ class LocalLLM:
                             f.write(chunk)
                             downloaded += len(chunk)
                             progress.update(task, completed=downloaded)
-            
+
             # Renommer le fichier temporaire
             shutil.move(str(temp_path), str(dest_path))
             console.print(f"\n[bold green]✓ Modèle téléchargé avec succès![/bold green]")
             console.print(f"[dim]Emplacement: {dest_path}[/dim]\n")
             return str(dest_path)
-            
+
         except urllib.error.URLError as e:
             console.print(f"[red]Erreur réseau: {e}[/red]")
         except Exception as e:
@@ -367,7 +402,7 @@ class LocalLLM:
                     temp_path.unlink()
                 except Exception:
                     pass
-        
+
         return None
 
     @staticmethod
@@ -390,7 +425,7 @@ class LocalLLM:
             "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
             "phi-3-mini-4k-instruct-q4_k_m.gguf",
         ]
-        
+
         # Dossiers de recherche (chemin absolu basé sur ce fichier)
         app_dir = Path(__file__).resolve().parent.parent  # App/
         search_dirs = [
@@ -402,7 +437,7 @@ class LocalLLM:
             Path.home() / ".cache" / "huggingface" / "hub",
             Path.home() / "models",
         ]
-        
+
         for directory in search_dirs:
             for name in model_names:
                 path = directory / name
@@ -413,17 +448,17 @@ class LocalLLM:
         # Modèle non trouvé: proposer le téléchargement automatique
         console.print("[yellow]⚠ Modèle LLM non trouvé localement[/yellow]")
         console.print("[cyan]Téléchargement automatique de Phi-4-mini...[/cyan]")
-        
+
         # Essayer Phi-4-mini d'abord, puis Phi-3-mini en fallback
         downloaded_path = LocalLLM._download_model("phi-4-mini")
         if downloaded_path:
             return downloaded_path
-        
+
         console.print("[yellow]Échec Phi-4-mini, essai avec Phi-3-mini...[/yellow]")
         downloaded_path = LocalLLM._download_model("phi-3-mini")
         if downloaded_path:
             return downloaded_path
-        
+
         return None
 
     def generate(

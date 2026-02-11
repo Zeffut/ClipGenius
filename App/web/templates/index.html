@@ -1050,24 +1050,19 @@
 
         .clips-grid {
             display: grid;
-            grid-template-columns: repeat(5, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
         
-        /* Responsive: moins de colonnes sur petits écrans */
-        @media (max-width: 1400px) {
-            .clips-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
+        /* Responsive: moins de colonnes sur petits ecrans */
         @media (max-width: 1100px) {
             .clips-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         @media (max-width: 800px) {
             .clips-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1091,77 +1086,22 @@
             transform: translateY(-2px);
         }
 
-        .clip-video-wrapper {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 9/16;
-            background: #000;
-            cursor: pointer;
-            overflow: hidden;
-        }
-
-        .clip-video {
-            width: 100%;
-            height: 100%;
-            display: block;
-            object-fit: cover;
-        }
-        
-        .clip-video-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+        .clip-card-body {
+            padding: 16px;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.3);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-        }
-        
-        /* Show play icon on hover */
-        .clip-video-wrapper:hover .clip-video-overlay {
-            opacity: 1;
-        }
-        
-        /* Always show play icon when paused */
-        .clip-video-wrapper.paused .clip-video-overlay {
-            opacity: 1;
-            background: rgba(0, 0, 0, 0.4);
-        }
-        
-        .play-icon {
-            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6));
-            transition: transform 0.2s ease;
-        }
-        
-        .clip-video-wrapper:hover .play-icon {
-            transform: scale(1.1);
+            flex-direction: column;
+            gap: 10px;
         }
 
-        /* Remove ALL Safari/Webkit video controls and overlays */
-        .clip-video::-webkit-media-controls {
-            display: none !important;
-        }
-        
-        .clip-video::-webkit-media-controls-enclosure {
-            display: none !important;
-        }
-        
-        .clip-video::-webkit-media-controls-panel {
-            display: none !important;
-        }
-
-        .clip-footer {
-            padding: 12px;
+        .clip-icon {
+            font-size: 28px;
+            margin-bottom: 2px;
         }
 
         .clip-name {
-            font-size: 12px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
         }
 
         /* Results Statistics */
@@ -4699,103 +4639,21 @@
                     card.className = 'clip-card';
                     card.dataset.index = clip.index;
                     
-                    // Utiliser directement l'URL Flask /output/filename.mp4
-                    const videoSrc = clip.url;
-                    
                     card.innerHTML = `
-                        <div class="clip-video-wrapper">
-                            <video class="clip-video" 
-                                   preload="auto" 
-                                   playsinline 
-                                   disablepictureinpicture
-                                   disableremoteplayback
-                                   x-webkit-airplay="deny"
-                                   loop>
-                                <source src="${videoSrc}" type="video/mp4">
-                                Votre navigateur ne supporte pas la lecture vidéo.
-                            </video>
-                            <div class="clip-video-overlay">
-                                <svg class="play-icon" width="64" height="64" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="clip-footer">
-                            <div style="width: 100%;">
-                                <div class="clip-name">Clip ${clip.index + 1}</div>
-                                <div class="clip-metadata">
-                                    <span class="clip-badge score">⭐ ${clip.score.toFixed(2)}</span>
-                                    <span class="clip-badge duration">⏱️ ${clip.duration}s</span>
-                                </div>
+                        <div class="clip-card-body">
+                            <div class="clip-name">Clip ${clip.index + 1}</div>
+                            <div class="clip-metadata">
+                                <span class="clip-badge score">Score ${clip.score.toFixed(2)}</span>
+                                <span class="clip-badge duration">${clip.duration}s</span>
                             </div>
                         </div>
                     `;
                 clipsGridElement.appendChild(card);
-                
-                // Setup click-to-play/pause functionality
-                const videoElement = card.querySelector('video');
-                const wrapper = card.querySelector('.clip-video-wrapper');
-                const overlay = card.querySelector('.clip-video-overlay');
-                const playIcon = card.querySelector('.play-icon');
-                
-                // Initially paused
-                wrapper.classList.add('paused');
-                
-                // Click to toggle play/pause
-                wrapper.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    
-                    if (videoElement.paused) {
-                        // Pause all other videos first
-                        document.querySelectorAll('.clip-video').forEach(v => {
-                            if (v !== videoElement) {
-                                v.pause();
-                                v.closest('.clip-video-wrapper').classList.add('paused');
-                            }
-                        });
-                        
-                        videoElement.play();
-                        wrapper.classList.remove('paused');
-                    } else {
-                        videoElement.pause();
-                        wrapper.classList.add('paused');
-                    }
-                });
-                
-                // Update overlay when video plays/pauses
-                videoElement.addEventListener('play', () => {
-                    wrapper.classList.remove('paused');
-                });
-                
-                videoElement.addEventListener('pause', () => {
-                    wrapper.classList.add('paused');
-                });
-                
-                // Error handling
-                videoElement.addEventListener('error', function(e) {
-                    console.error('Erreur de chargement vidéo:', clip.url, e);
-                });
-                
-                // Force load first frame for poster display
-                videoElement.addEventListener('loadedmetadata', function() {
-                    // Set to a small time offset to force display of first frame
-                    videoElement.currentTime = 0.1;
-                });
-                
-                // When first frame is loaded, show it
-                videoElement.addEventListener('loadeddata', function() {
-                    // Pause immediately to show the first frame
-                    if (videoElement.currentTime < 0.2) {
-                        videoElement.pause();
-                        wrapper.classList.add('paused');
-                    }
-                });
             });
             
             
         } catch (err) {
-            console.error('❌ Erreur renderClips:', err);
+            console.error('Erreur renderClips:', err);
             alert('Erreur lors du rendu des clips: ' + err.message);
         }
         }

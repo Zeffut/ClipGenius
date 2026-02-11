@@ -16,6 +16,11 @@ from rich.console import Console
 
 console = Console()
 
+# Constantes de test
+SEGMENT_DURATION = 30
+SEGMENT_1_END = 60
+SEGMENT_2_END = 90
+
 
 def test_local_llm_available():
     """Test 1: Vérifier si un modèle Phi (4 ou 3) est disponible."""
@@ -103,9 +108,9 @@ def test_analyze_with_ai():
 
         # Tester avec un segment court
         segments = [
-            TranscriptSegment(0, 30, "Ceci est un test de contenu viral"),
-            TranscriptSegment(30, 60, "avec plusieurs segments pour validation"),
-            TranscriptSegment(60, 90, "et un dernier segment pour la durée")
+            TranscriptSegment(0, SEGMENT_DURATION, "Ceci est un test de contenu viral"),
+            TranscriptSegment(SEGMENT_DURATION, SEGMENT_1_END, "avec plusieurs segments pour validation"),
+            TranscriptSegment(SEGMENT_1_END, SEGMENT_2_END, "et un dernier segment pour la durée")
         ]
 
         console.print("  [dim]Tentative d'analyse (peut prendre du temps si chargement du modèle)...[/dim]")

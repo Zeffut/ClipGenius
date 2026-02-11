@@ -6,7 +6,7 @@ et paramètres d'encodage en configurations prédéfinies.
 
 Usage:
     from src.presets import get_preset, list_presets, PRESETS
-    
+
     preset = get_preset("tiktok_viral")
     config = preset.to_clip_config()
 """
@@ -14,6 +14,15 @@ Usage:
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from enum import Enum
+
+# Constantes de configuration par défaut pour les presets visuels et sous-titres
+DEFAULT_ZOOM_FACTOR: float = 1.05
+DEFAULT_SHARPENING_STRENGTH: float = 0.3
+DEFAULT_VIGNETTE_STRENGTH: float = 0.15
+DEFAULT_KEN_BURNS_INTENSITY: float = 0.02
+DEFAULT_BLUR_STRENGTH: int = 51
+DEFAULT_BASE_FONT_SIZE: int = 56
+DEFAULT_KEYWORD_SIZE_MULTIPLIER: float = 1.18
 
 
 class PresetCategory(Enum):
@@ -31,25 +40,25 @@ class VisualPreset:
     # Color grading
     color_grading_enabled: bool = True
     color_grading_style: str = "warm"  # warm, cool, vibrant, cinematic, none
-    
+
     # Zoom effect
     zoom_enabled: bool = True
-    zoom_factor: float = 1.05
+    zoom_factor: float = DEFAULT_ZOOM_FACTOR
     zoom_style: str = "ease_out"  # ease_out, ease_in_out, breathing, pulse
-    
+
     # Post-processing
     sharpening_enabled: bool = True
-    sharpening_strength: float = 0.3
+    sharpening_strength: float = DEFAULT_SHARPENING_STRENGTH
     vignette_enabled: bool = False
-    vignette_strength: float = 0.15
-    
+    vignette_strength: float = DEFAULT_VIGNETTE_STRENGTH
+
     # Ken Burns
     ken_burns_enabled: bool = False
-    ken_burns_intensity: float = 0.02
-    
+    ken_burns_intensity: float = DEFAULT_KEN_BURNS_INTENSITY
+
     # Blur fill
     blur_fill_enabled: bool = True
-    blur_strength: int = 51
+    blur_strength: int = DEFAULT_BLUR_STRENGTH
 
 
 @dataclass
@@ -60,23 +69,23 @@ class SubtitlePreset:
     theme: str = "viral"   # viral, professional, minimal, neon, gaming, podcast
     max_words: int = 3
     use_emojis: bool = True
-    
+
     # Couleurs personnalisées (optionnel, sinon défaut du thème)
     primary_color: Optional[str] = None          # Couleur principale des mots
     keyword_color: Optional[str] = None          # Couleur des mots-clés
     number_color: Optional[str] = None           # Couleur des chiffres
     emphasis_color: Optional[str] = None         # Couleur des mots d'emphase
     highlight_color: Optional[str] = None        # Couleur du mot actuel
-    
+
     # Tailles
-    base_font_size: int = 56                     # Taille de police de base
-    keyword_size_multiplier: float = 1.18        # Multiplicateur pour mots-clés
-    
+    base_font_size: int = DEFAULT_BASE_FONT_SIZE                     # Taille de police de base
+    keyword_size_multiplier: float = DEFAULT_KEYWORD_SIZE_MULTIPLIER        # Multiplicateur pour mots-clés
+
     # Style de police
     font_family: str = "Poppins"                 # Police à utiliser
     text_transform: str = "uppercase"            # uppercase, capitalize, none
     uppercase_keywords: bool = True              # Mettre les mots-clés en majuscules
-    
+
     # Effets visuels
     enable_animations: bool = True               # Activer les animations de mots
     enable_glow: bool = True                     # Activer l'effet de glow
@@ -91,11 +100,11 @@ class EncodingPreset:
     preset: str = "slow"  # ultrafast, fast, medium, slow, veryslow
     video_profile: str = "high"
     video_level: str = "4.1"
-    
+
     # Bitrates
     video_bitrate: str = "8M"
     audio_bitrate: str = "192k"
-    
+
     # Format
     output_fps: int = 30
     output_width: int = 1080
@@ -109,30 +118,30 @@ class ClipGeniusPreset:
     name: str
     description: str
     category: PresetCategory
-    
+
     # Sous-configurations
     visual: VisualPreset = field(default_factory=VisualPreset)
     subtitle: SubtitlePreset = field(default_factory=SubtitlePreset)
     encoding: EncodingPreset = field(default_factory=EncodingPreset)
-    
+
     # Paramètres de détection
     min_duration: float = 30.0
     max_duration: float = 90.0
     min_viral_score: float = 0.60
-    
+
     # Options de traitement
     smart_crop: bool = True
     optimize_hooks: bool = True
     advanced_audio: bool = True
     adaptive_duration: bool = True
     use_ai: bool = True
-    
+
     def _build_subtitle_colors_dict(self) -> Optional[Dict[str, Any]]:
         """
         Construit le dictionnaire de couleurs/styles personnalisés pour les sous-titres
         """
         subtitle_colors = {}
-        
+
         # Couleurs
         if self.subtitle.primary_color:
             subtitle_colors['primary_color'] = self.subtitle.primary_color
@@ -144,23 +153,23 @@ class ClipGeniusPreset:
             subtitle_colors['emphasis_color'] = self.subtitle.emphasis_color
         if self.subtitle.highlight_color:
             subtitle_colors['highlight_color'] = self.subtitle.highlight_color
-        
+
         # Tailles
         subtitle_colors['base_font_size'] = self.subtitle.base_font_size
         subtitle_colors['keyword_size_multiplier'] = self.subtitle.keyword_size_multiplier
-        
+
         # Styles
         subtitle_colors['font_family'] = self.subtitle.font_family
         subtitle_colors['text_transform'] = self.subtitle.text_transform
         subtitle_colors['uppercase_keywords'] = self.subtitle.uppercase_keywords
-        
+
         # Effets
         subtitle_colors['enable_animations'] = self.subtitle.enable_animations
         subtitle_colors['enable_glow'] = self.subtitle.enable_glow
         subtitle_colors['enable_3d_shadow'] = self.subtitle.enable_3d_shadow
-        
+
         return subtitle_colors if subtitle_colors else None
-    
+
     def to_clip_config(self) -> Dict[str, Any]:
         """
         Convertit le preset en paramètres pour ClipConfig
@@ -170,12 +179,12 @@ class ClipGeniusPreset:
             'output_width': self.encoding.output_width,
             'output_height': self.encoding.output_height,
             'output_fps': self.encoding.output_fps,
-            
+
             # Durées
             'min_clip_duration': self.min_duration,
             'max_clip_duration': self.max_duration,
             'min_viral_score': self.min_viral_score,
-            
+
             # Encodage
             'crf': self.encoding.crf,
             'preset': self.encoding.preset,
@@ -184,7 +193,7 @@ class ClipGeniusPreset:
             'video_bitrate': self.encoding.video_bitrate,
             'audio_bitrate': self.encoding.audio_bitrate,
             'use_lanczos': self.encoding.use_lanczos,
-            
+
             # Sous-titres (config de base + options personnalisées)
             'add_subtitles': self.subtitle.enabled,
             'subtitle_enriched': self.subtitle.enriched,
@@ -192,19 +201,19 @@ class ClipGeniusPreset:
             'subtitle_max_words': self.subtitle.max_words,
             'subtitle_use_emojis': self.subtitle.use_emojis,
             'subtitle_custom_colors': self._build_subtitle_colors_dict(),
-            
+
             # Zoom
             'enable_zoom_effect': self.visual.zoom_enabled,
             'zoom_factor': self.visual.zoom_factor,
             'zoom_style': self.visual.zoom_style,
-            
+
             # Blur fill
             'enable_blur_fill': self.visual.blur_fill_enabled,
             'blur_strength': self.visual.blur_strength,
-            
+
             # Smart crop
             'smart_crop': self.smart_crop,
-            
+
             # Effets cinématiques
             'enable_color_grading': self.visual.color_grading_enabled,
             'color_grading_style': self.visual.color_grading_style,
@@ -212,12 +221,12 @@ class ClipGeniusPreset:
             'sharpening_strength': self.visual.sharpening_strength,
             'enable_vignette': self.visual.vignette_enabled,
             'vignette_strength': self.visual.vignette_strength,
-            
+
             # Ken Burns
             'enable_ken_burns': self.visual.ken_burns_enabled,
             'ken_burns_intensity': self.visual.ken_burns_intensity,
         }
-    
+
     def get_subtitle_options(self) -> Dict[str, Any]:
         """
         Retourne les options pour les sous-titres
@@ -249,11 +258,11 @@ class ClipGeniusPreset:
 # =============================================================================
 
 PRESETS: Dict[str, ClipGeniusPreset] = {
-    
+
     # -------------------------------------------------------------------------
     # PODCAST / INTERVIEW - Focus sur la parole et les échanges
     # -------------------------------------------------------------------------
-    
+
     "podcast": ClipGeniusPreset(
         name="Podcast",
         description="Optimisé pour les podcasts et interviews. Focus sur la clarté du discours et les moments forts.",
@@ -299,7 +308,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.55,
     ),
-    
+
     "interview": ClipGeniusPreset(
         name="Interview",
         description="Pour les interviews et discussions. Transitions douces, sous-titres lisibles.",
@@ -345,11 +354,11 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         min_viral_score=0.50,
         optimize_hooks=False,
     ),
-    
+
     # -------------------------------------------------------------------------
     # GAMING - Dynamique et énergique
     # -------------------------------------------------------------------------
-    
+
     "gaming": ClipGeniusPreset(
         name="Gaming",
         description="Pour les clips de jeux vidéo. Couleurs vibrantes, effets dynamiques, sous-titres flashy.",
@@ -393,7 +402,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=60.0,
         min_viral_score=0.55,
     ),
-    
+
     "stream": ClipGeniusPreset(
         name="Stream",
         description="Pour les meilleurs moments de stream. Capture les réactions et moments forts.",
@@ -424,11 +433,11 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=60.0,
         min_viral_score=0.50,
     ),
-    
+
     # -------------------------------------------------------------------------
     # VLOG - Lifestyle et voyage
     # -------------------------------------------------------------------------
-    
+
     "vlog": ClipGeniusPreset(
         name="Vlog",
         description="Pour les vlogs lifestyle et voyage. Look chaleureux et authentique.",
@@ -473,7 +482,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=60.0,
         min_viral_score=0.55,
     ),
-    
+
     "lifestyle": ClipGeniusPreset(
         name="Lifestyle",
         description="Pour le contenu lifestyle haut de gamme. Look épuré et élégant.",
@@ -518,11 +527,11 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=60.0,
         min_viral_score=0.60,
     ),
-    
+
     # -------------------------------------------------------------------------
     # QUALITÉ D'ENCODAGE - Presets axés sur la qualité vidéo
     # -------------------------------------------------------------------------
-    
+
     "standard": ClipGeniusPreset(
         name="Standard",
         description="Qualité standard. Bon équilibre qualité/taille. Encodage rapide.",
@@ -556,7 +565,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.60,
     ),
-    
+
     "high": ClipGeniusPreset(
         name="Haute Qualité",
         description="Haute qualité. CRF 18, preset medium. Idéal pour publication finale.",
@@ -594,7 +603,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.60,
     ),
-    
+
     "ultra": ClipGeniusPreset(
         name="Ultra Qualité",
         description="Qualité maximale. CRF 15, preset slow. Pour les créateurs exigeants.",
@@ -636,7 +645,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.55,           # Seuil légèrement plus bas pour plus de contenu
     ),
-    
+
     "master": ClipGeniusPreset(
         name="Master",
         description="Qualité master/archive. CRF 12, preset veryslow. Fichiers très lourds.",
@@ -677,11 +686,11 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.50,
     ),
-    
+
     # -------------------------------------------------------------------------
     # UTILITAIRES - Modes spéciaux
     # -------------------------------------------------------------------------
-    
+
     "fast": ClipGeniusPreset(
         name="Rapide",
         description="Encodage ultra-rapide. Qualité réduite mais traitement 3x plus rapide.",
@@ -719,7 +728,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.60,
     ),
-    
+
     "clean": ClipGeniusPreset(
         name="Sans effets",
         description="Sans effets visuels. Recadrage intelligent et sous-titres uniquement.",
@@ -753,7 +762,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=90.0,
         min_viral_score=0.60,
     ),
-    
+
     "preview": ClipGeniusPreset(
         name="Preview",
         description="Mode preview pour tester rapidement. Basse qualité, encodage instantané.",
@@ -785,7 +794,7 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
         max_duration=60.0,
         min_viral_score=0.50,
     ),
-    
+
 }
 
 
@@ -796,26 +805,26 @@ PRESETS: Dict[str, ClipGeniusPreset] = {
 def get_preset(name: str) -> ClipGeniusPreset:
     """
     Récupère un preset par son nom.
-    
+
     Args:
         name: Nom du preset (insensible à la casse)
-        
+
     Returns:
         Le preset demandé
-        
+
     Raises:
         KeyError: Si le preset n'existe pas
     """
     name_lower = name.lower().replace("-", "_").replace(" ", "_")
-    
+
     if name_lower in PRESETS:
         return PRESETS[name_lower]
-    
+
     # Recherche partielle
     matches = [k for k in PRESETS if name_lower in k]
     if len(matches) == 1:
         return PRESETS[matches[0]]
-    
+
     available = ", ".join(sorted(PRESETS.keys()))
     raise KeyError(f"Preset '{name}' non trouvé. Disponibles: {available}")
 
@@ -823,16 +832,16 @@ def get_preset(name: str) -> ClipGeniusPreset:
 def list_presets(category: Optional[PresetCategory] = None) -> List[ClipGeniusPreset]:
     """
     Liste tous les presets disponibles.
-    
+
     Args:
         category: Filtrer par catégorie (optionnel)
-        
+
     Returns:
         Liste des presets
     """
     if category is None:
         return list(PRESETS.values())
-    
+
     return [p for p in PRESETS.values() if p.category == category]
 
 
@@ -850,15 +859,15 @@ def print_presets_table():
     """
     from rich.table import Table
     from rich.console import Console
-    
+
     console = Console()
     table = Table(title="Presets ClipGenius", show_header=True, header_style="bold cyan")
-    
+
     table.add_column("Nom", style="cyan", width=15)
     table.add_column("Catégorie", style="magenta", width=10)
     table.add_column("Description", style="white", width=50)
     table.add_column("Durée", justify="right", width=10)
-    
+
     for name, preset in sorted(PRESETS.items()):
         duration = f"{preset.min_duration:.0f}-{preset.max_duration:.0f}s"
         table.add_row(
@@ -867,7 +876,7 @@ def print_presets_table():
             preset.description[:48] + "..." if len(preset.description) > 50 else preset.description,
             duration
         )
-    
+
     console.print(table)
 
 
@@ -879,11 +888,11 @@ def apply_preset_to_args(preset: ClipGeniusPreset, args: Dict[str, Any]) -> Dict
     """
     Applique un preset aux arguments CLI existants.
     Les arguments explicites de l'utilisateur ont priorité sur le preset.
-    
+
     Args:
         preset: Le preset à appliquer
         args: Arguments CLI existants
-        
+
     Returns:
         Arguments fusionnés
     """
@@ -902,7 +911,7 @@ def apply_preset_to_args(preset: ClipGeniusPreset, args: Dict[str, Any]) -> Dict
         'max_words': preset.subtitle.max_words,
         'emojis': preset.subtitle.use_emojis,
     }
-    
+
     # Fusionner: preset d'abord, puis override avec args explicites
     result = {}
     for key, preset_value in preset_defaults.items():
@@ -911,12 +920,12 @@ def apply_preset_to_args(preset: ClipGeniusPreset, args: Dict[str, Any]) -> Dict
             result[key] = preset_value
         else:
             result[key] = args[key]
-    
+
     # Ajouter les autres args non couverts par le preset
     for key, value in args.items():
         if key not in result:
             result[key] = value
-    
+
     return result
 
 

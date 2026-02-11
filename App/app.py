@@ -30,6 +30,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 # CONFIGURATION
 # =============================================================================
 
+# Constantes de configuration
+DOWNLOAD_TIMEOUT_SECONDS = 30
+SPEED_SMOOTHING_ALPHA_MAX = 0.3
+SPEED_SMOOTHING_ALPHA_MIN = 0.05
+SPEED_SMOOTHING_DIFF_FACTOR = 0.5
+NOTIFY_INTERVAL_SECONDS = 0.25
+
 MODELS_DIR = "models"
 # Phi-4-mini-instruct (recommandé, meilleure qualité)
 PHI4_MODEL_NAME = "Phi-4-mini-instruct.Q4_K_M.gguf"
@@ -75,7 +82,7 @@ def find_phi_model() -> Optional[Path]:
         "phi-3-mini-4k-instruct-q4.gguf",
         "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
     ]
-    
+
     # Chercher Phi-4 d'abord
     for directory in search_dirs:
         if not directory.exists():
@@ -84,7 +91,7 @@ def find_phi_model() -> Optional[Path]:
             model_path = directory / name
             if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
                 return model_path
-    
+
     # Fallback sur Phi-3
     for directory in search_dirs:
         if not directory.exists():
@@ -93,7 +100,7 @@ def find_phi_model() -> Optional[Path]:
             model_path = directory / name
             if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
                 return model_path
-    
+
     return None
 
 
@@ -106,30 +113,30 @@ def find_phi3_model() -> Optional[Path]:
 def download_phi_model(progress_callback=None) -> Optional[Path]:
     """
     Télécharge le modèle Phi-4 (ou Phi-3 en fallback) avec progression.
-    
+
     Args:
         progress_callback: Fonction appelée avec (downloaded_mb, total_mb, speed_mb_s, eta_text)
-    
+
     Returns:
         Path vers le modèle téléchargé, ou None si échec
     """
     models_dir = get_models_dir()
-    
+
     # Essayer Phi-4 d'abord
     model_path = models_dir / PHI4_MODEL_NAME
     temp_path = models_dir / f"{PHI4_MODEL_NAME}.tmp"
     model_url = PHI4_MODEL_URL
     model_size = PHI4_MODEL_SIZE_MB
-    
+
     # Vérifier si déjà présent
     if model_path.exists() and model_path.stat().st_size > 1_000_000_000:
         return model_path
-    
+
     try:
         req = urllib.request.Request(model_url)
         req.add_header('User-Agent', 'ClipGenius/beta')
-        
-        with urllib.request.urlopen(req, timeout=30) as response:
+
+        with urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
             total = int(response.headers.get('Content-Length', model_size * 1024 * 1024))
             total_mb = total / (1024 * 1024)
             downloaded = 0
@@ -137,23 +144,23 @@ def download_phi_model(progress_callback=None) -> Optional[Path]:
             last_speed_bytes = 0
             last_notify_time = time.time()
             current_speed = 0.0
-            
+
             # Lissage ETA
             smoothed_speed = 0.0
             displayed_eta = None
             speed_samples = []
-            
+
             with open(temp_path, 'wb') as f:
                 while True:
                     chunk = response.read(1024 * 1024)  # 1MB
                     if not chunk:
                         break
-                    
+
                     f.write(chunk)
                     downloaded += len(chunk)
-                    
+
                     now = time.time()
-                    
+
                     # Calculer le débit instantané toutes les 0.5s
                     speed_elapsed = now - last_speed_time
                     if speed_elapsed >= 0.5:
@@ -161,7 +168,7 @@ def download_phi_model(progress_callback=None) -> Optional[Path]:
                         current_speed = bytes_since / speed_elapsed / (1024 * 1024)
                         last_speed_time = now
                         last_speed_bytes = downloaded
-                        
+
                         # Lissage de la vitesse pour l'ETA
                         if current_speed > 0:
                             if len(speed_samples) < 5:
@@ -169,20 +176,20 @@ def download_phi_model(progress_callback=None) -> Optional[Path]:
                                 smoothed_speed = sum(speed_samples) / len(speed_samples)
                             else:
                                 diff_ratio = abs(current_speed - smoothed_speed) / max(smoothed_speed, 0.1)
-                                alpha = min(0.3, max(0.05, diff_ratio * 0.5))
+                                alpha = min(SPEED_SMOOTHING_ALPHA_MAX, max(SPEED_SMOOTHING_ALPHA_MIN, diff_ratio * SPEED_SMOOTHING_DIFF_FACTOR))
                                 smoothed_speed = alpha * current_speed + (1 - alpha) * smoothed_speed
-                    
+
                     # Notifier toutes les 250ms
                     notify_elapsed = now - last_notify_time
-                    if notify_elapsed >= 0.25 and progress_callback:
+                    if notify_elapsed >= NOTIFY_INTERVAL_SECONDS and progress_callback:
                         mb = downloaded / (1024 * 1024)
-                        
+
                         # Calculer ETA
                         eta_text = ""
                         if smoothed_speed > 0:
                             remaining_mb = total_mb - mb
                             raw_eta = remaining_mb / smoothed_speed
-                            
+
                             if displayed_eta is None:
                                 displayed_eta = raw_eta
                             else:
@@ -190,20 +197,20 @@ def download_phi_model(progress_callback=None) -> Optional[Path]:
                                     displayed_eta = 0.7 * displayed_eta + 0.3 * raw_eta
                                 else:
                                     displayed_eta = 0.95 * displayed_eta + 0.05 * raw_eta
-                            
+
                             eta_seconds = max(0, displayed_eta)
                             if eta_seconds < 60:
                                 eta_text = f"{int(eta_seconds)}s"
                             else:
                                 eta_text = f"{int(eta_seconds // 60)}m {int(eta_seconds % 60)}s"
-                        
+
                         progress_callback(mb, total_mb, current_speed, eta_text)
                         last_notify_time = now
-        
+
         # Renommer le fichier temporaire
         temp_path.rename(model_path)
         return model_path
-        
+
     except Exception as e:
         print(f"Erreur de téléchargement: {e}")
         if temp_path.exists():
@@ -221,7 +228,7 @@ def ensure_phi_model() -> Optional[Path]:
     """
     S'assure que le modèle Phi-4 (ou Phi-3) est disponible.
     Le télécharge si nécessaire avec progression console.
-    
+
     Returns:
         Path vers le modèle, ou None si échec
     """
@@ -229,32 +236,32 @@ def ensure_phi_model() -> Optional[Path]:
     model_path = find_phi_model()
     if model_path:
         return model_path
-    
+
     print("\n" + "="*50)
     print("  Téléchargement du modèle AI (première utilisation)")
     print("="*50 + "\n")
     print(f"  Modèle: {PHI4_MODEL_NAME}")
     print(f"  Taille: ~{PHI4_MODEL_SIZE_MB} MB")
     print()
-    
+
     def show_progress(downloaded, total, speed, eta):
         pct = int(downloaded / total * 100)
         bar_width = 30
         filled = int(bar_width * downloaded / total)
         bar = "█" * filled + "░" * (bar_width - filled)
-        
+
         speed_text = f"{speed:.1f} MB/s" if speed > 0 else "..."
         eta_text = f" - {eta} restant" if eta else ""
-        
+
         print(f"\r  [{bar}] {pct}% - {downloaded:.0f}/{total:.0f} MB - {speed_text}{eta_text}    ", end="", flush=True)
-    
+
     result = download_phi_model(progress_callback=show_progress)
-    
+
     if result:
         print("\n\n  ✓ Modèle téléchargé avec succès!\n")
     else:
         print("\n\n  ✗ Échec du téléchargement\n")
-    
+
     return result
 
 
@@ -285,7 +292,7 @@ def start_caffeinate():
     """
     global caffeinate_process
     import platform
-    
+
     if platform.system() == 'Darwin':  # macOS seulement
         try:
             # Options caffeinate:
@@ -322,13 +329,13 @@ def stop_caffeinate():
 
 class Api:
     """API exposée à JavaScript via PyWebView"""
-    
+
     def __init__(self, window=None):
         self._window = window
-    
+
     def set_window(self, window):
         self._window = window
-    
+
     def select_video_file(self):
         """
         Ouvre un dialogue de sélection de fichier vidéo.
@@ -337,26 +344,26 @@ class Api:
         global webview
         if not self._window or not webview:
             return None
-        
+
         file_types = ('Fichiers vidéo (*.mp4;*.mov;*.avi;*.mkv;*.webm)',)
         result = self._window.create_file_dialog(
             dialog_type=webview.OPEN_DIALOG,
             allow_multiple=False,
             file_types=file_types
         )
-        
+
         if result and len(result) > 0:
             return result[0]
         return None
-    
+
     def open_output_folder(self):
         """Ouvre le dossier output dans l'explorateur de fichiers"""
         import subprocess
         import platform
-        
+
         output_dir = Path(__file__).parent / 'output'
         output_dir.mkdir(exist_ok=True)
-        
+
         system = platform.system()
         if system == 'Darwin':  # macOS
             subprocess.run(['open', str(output_dir)])
@@ -364,9 +371,9 @@ class Api:
             subprocess.run(['explorer', str(output_dir)])
         else:  # Linux
             subprocess.run(['xdg-open', str(output_dir)])
-        
+
         return True
-    
+
     def get_video_as_base64(self, file_path):
         """Convertit une vidéo en base64 pour l'afficher dans PyWebView"""
         import base64
@@ -378,7 +385,7 @@ class Api:
         except Exception as e:
             print(f"Erreur get_video_as_base64: {e}")
             return None
-    
+
     def get_file_info(self, file_path):
         """Retourne les informations sur un fichier"""
         try:
@@ -398,14 +405,14 @@ class Api:
 def run_main_app():
     """Lance l'application principale"""
     global webview
-    
+
     # Référence module-level pour empêcher le garbage collection de l'activité NSProcessInfo
     _ns_activity = None
-    
+
     # Supprimer les logs verbeux
     os.environ['GLOG_minloglevel'] = '2'
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-    
+
     # ⚡ Désactiver App Nap et optimiser les performances (macOS)
     import platform
     if platform.system() == 'Darwin':
@@ -414,7 +421,7 @@ def run_main_app():
             try:
                 from Foundation import NSProcessInfo
                 from AppKit import NSActivityUserInitiated, NSActivityLatencyCritical, NSActivityIdleSystemSleepDisabled
-                
+
                 info = NSProcessInfo.processInfo()
                 # Combinaison de flags pour performances maximales :
                 # - NSActivityUserInitiated (0x00FFFFFF) : Priorité utilisateur haute
@@ -425,35 +432,35 @@ def run_main_app():
                     NSActivityLatencyCritical |
                     NSActivityIdleSystemSleepDisabled
                 )
-                
+
                 # Démarrer une activité en arrière-plan avec ces options
                 _ns_activity = info.beginActivityWithOptions_reason_(
                     activity_options,
                     "ClipGenius: Analyse et génération de clips vidéo"
                 )
                 print("⚡ Optimisations macOS activées (App Nap désactivé)")
-                
+
             except ImportError:
                 # pyobjc pas installé, utiliser des alternatives
                 print("⚠️  pyobjc non disponible, performances en arrière-plan potentiellement réduites")
                 print("   Installation recommandée: pip install pyobjc-framework-Cocoa")
-                
+
         except Exception as e:
             print(f"⚠️  Impossible d'optimiser les performances: {e}")
-    
+
     try:
         import webview as wv
         webview = wv  # Stocker dans la variable globale
         WEBVIEW_AVAILABLE = True
     except ImportError:
         WEBVIEW_AVAILABLE = False
-    
+
     from dotenv import load_dotenv
     load_dotenv()
-    
+
     # === NETTOYAGE AU DÉMARRAGE ===
     print("\n🧹 Nettoyage des fichiers résiduels...")
-    
+
     # Nettoyer output/
     output_path = Path('output')
     output_path.mkdir(exist_ok=True)
@@ -464,7 +471,7 @@ def run_main_app():
                 print(f"  🗑️ Supprimé: output/{f.name}")
             except:
                 pass
-    
+
     # === DÉSACTIVÉ: Ne plus supprimer downloads/ au démarrage ===
     # La vidéo doit rester disponible entre l'analyse et la génération
     # downloads_path = Path('downloads')
@@ -476,7 +483,7 @@ def run_main_app():
     #         except:
     #             pass
     print("  ⏭️ downloads/ préservé (nécessaire pour génération)")
-    
+
     # Nettoyer temp pycaps
     import tempfile
     temp_base = Path(tempfile.gettempdir())
@@ -487,18 +494,18 @@ def run_main_app():
             print(f"  🗑️ Supprimé: {pycaps_dir.name}")
         except:
             pass
-    
+
     print("✅ Nettoyage terminé\n")
-    
+
     # === LAZY IMPORT: Charger Flask seulement maintenant ===
     print("⏳ Chargement de l'interface...")
     from web_app import app as flask_app
     print("✓ Interface prête!")
-    
+
     if WEBVIEW_AVAILABLE:
         import logging
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        
+
         # Démarrer Flask en arrière-plan avec thread daemon
         flask_thread = threading.Thread(
             target=lambda: flask_app.run(host='127.0.0.1', port=5001, debug=False, threaded=True, use_reloader=False),
@@ -507,13 +514,13 @@ def run_main_app():
         )
         flask_thread.start()
         time.sleep(1)
-        
+
         # Créer l'API
         api = Api()
-        
+
         # ☕ Lancer caffeinate pour empêcher la mise en veille
         start_caffeinate()
-        
+
         # Handler de fermeture pour cleanup propre
         def on_closing():
             """Appelé quand l'utilisateur ferme la fenêtre"""
@@ -522,7 +529,7 @@ def run_main_app():
             shutdown_event.set()  # Signaler l'arrêt aux threads
             time.sleep(0.5)  # Laisser les threads se terminer
             return True  # Permettre la fermeture
-        
+
         # Créer la fenêtre native avec l'API
         window = webview.create_window(
             title='ClipGenius',
@@ -536,10 +543,10 @@ def run_main_app():
             on_top=False,
             confirm_close=False
         )
-        
+
         # Donner la référence de la fenêtre à l'API
         api.set_window(window)
-        
+
         # Démarrer webview avec handler de fermeture
         # Note: PyWebView ne supporte pas directement on_closing callback
         # On utilise signal handler à la place
@@ -549,21 +556,21 @@ def run_main_app():
             shutdown_event.set()
             time.sleep(0.5)
             sys.exit(0)
-        
+
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
-        
+
         # Démarrer avec debug=False pour éviter la suspension
         webview.start(debug=False)
     else:
         # Fallback navigateur
         import webbrowser
-        
+
         threading.Thread(
             target=lambda: (time.sleep(1), webbrowser.open('http://127.0.0.1:5001')),
             daemon=True
         ).start()
-        
+
         flask_app.run(host='127.0.0.1', port=5001, debug=False, threaded=True, use_reloader=False)
 
 
@@ -572,7 +579,7 @@ def main():
     print("\n" + "="*50)
     print("  ClipGenius beta")
     print("="*50 + "\n")
-    
+
     # Vérifier/télécharger le modèle AI au premier démarrage
     model_path = find_phi3_model()
     if not model_path:
@@ -581,9 +588,9 @@ def main():
             print("⚠️  L'application fonctionnera sans analyse AI locale.\n")
     else:
         print(f"✓ Modèle AI: {model_path.name}\n")
-    
+
     print("🚀 Démarrage de l'application...\n")
-    
+
     try:
         run_main_app()
     except KeyboardInterrupt:

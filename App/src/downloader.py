@@ -18,15 +18,21 @@ console = Console()
 # Type pour le callback de progression
 ProgressCallback = Callable[[int, str], None]  # (percent, message)
 
+# Constantes de configuration pour la progression du téléchargement
+PROGRESS_DOWNLOAD_BASE = 20       # Pourcentage de départ pour le mapping du téléchargement
+PROGRESS_DOWNLOAD_SCALE = 0.7     # Facteur d'échelle pour mapper 0-100% vers 20-90%
+PROGRESS_CONVERSION = 92          # Pourcentage affiché lors de la conversion post-téléchargement
+PROGRESS_METADATA = 10            # Pourcentage affiché lors de la récupération des métadonnées
+
 
 class VideoDownloader:
     """Télécharge des vidéos YouTube avec yt-dlp"""
-    
+
     def __init__(self, output_dir: str = "downloads"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._progress_callback: Optional[ProgressCallback] = None
-        
+
     def get_video_info(self, url: str) -> Dict[str, Any]:
         """Récupère les informations de la vidéo sans télécharger"""
         ydl_opts = {
@@ -42,7 +48,7 @@ class VideoDownloader:
             },
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         }
-        
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {
@@ -54,17 +60,17 @@ class VideoDownloader:
                 'like_count': info.get('like_count', 0),
                 'id': info.get('id', ''),
             }
-    
+
     def _make_progress_hook(self):
         """Crée un hook de progression pour yt-dlp"""
         last_percent = [0]  # Utiliser une liste pour modifier dans la closure
-        
+
         def hook(d):
             if d['status'] == 'downloading':
                 # Calculer le pourcentage
                 total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
                 downloaded = d.get('downloaded_bytes', 0)
-                
+
                 if total > 0:
                     percent = int((downloaded / total) * 100)
                     # Ne reporter que si le pourcentage a changé d'au moins 2%
@@ -74,59 +80,59 @@ class VideoDownloader:
                         speed_str = f"{speed/1024/1024:.1f} MB/s" if speed else ""
                         eta = d.get('eta', 0)
                         eta_str = f"ETA: {eta}s" if eta else ""
-                        
+
                         msg = f"Téléchargement: {percent}%"
                         if speed_str:
                             msg += f" ({speed_str})"
                         if eta_str:
                             msg += f" - {eta_str}"
-                        
+
                         if self._progress_callback:
                             # Mapper 0-100% du download vers 20-90% de l'étape
-                            mapped_percent = 20 + int(percent * 0.7)
+                            mapped_percent = PROGRESS_DOWNLOAD_BASE + int(percent * PROGRESS_DOWNLOAD_SCALE)
                             self._progress_callback(mapped_percent, msg)
-                            
+
             elif d['status'] == 'finished':
                 if self._progress_callback:
-                    self._progress_callback(92, "Téléchargement terminé, conversion en cours...")
-                    
+                    self._progress_callback(PROGRESS_CONVERSION, "Téléchargement terminé, conversion en cours...")
+
         return hook
-    
-    def download(self, url: str, quality: str = "best", 
+
+    def download(self, url: str, quality: str = "best",
                  progress_callback: Optional[ProgressCallback] = None,
                  max_retries: int = 3) -> Optional[str]:
         """
         Télécharge une vidéo YouTube avec retry automatique en cas d'erreur réseau.
-        
+
         Args:
             url: URL de la vidéo YouTube
             quality: Qualité souhaitée ('best', '1080p', '720p', '480p')
             progress_callback: Callback pour la progression (percent, message)
             max_retries: Nombre maximum de tentatives (défaut: 3)
-            
+
         Returns:
             Chemin vers le fichier téléchargé ou None si échec
         """
         self._progress_callback = progress_callback
-        
+
         # S'assurer que deno est disponible pour YouTube (haute qualité)
         runtime_manager = get_runtime_manager()
         deno_path = runtime_manager.ensure_deno(progress_callback)
-        
+
         if deno_path:
             console.print(f"[green]Runtime deno disponible: {deno_path}[/green]")
         else:
             console.print("[yellow]deno non disponible, qualité peut être limitée[/yellow]")
-        
+
         # Configurer l'environnement avec deno dans le PATH
         env = runtime_manager.get_yt_dlp_env()
-        
+
         # Configuration de la qualité
         format_spec = self._get_format_spec(quality)
-        
+
         # Nom du fichier de sortie
         output_template = str(self.output_dir / '%(title)s.%(ext)s')
-        
+
         ydl_opts = {
             'format': format_spec,
             'outtmpl': output_template,
@@ -152,15 +158,15 @@ class VideoDownloader:
                 'Accept-Language': 'en-us,en;q=0.5',
             },
         }
-        
+
         # Sauvegarder le PATH original avant mutation
         original_path = os.environ.get("PATH", "")
-        
+
         # Mettre à jour l'environnement du processus pour yt-dlp
         os.environ.update(env)
-        
+
         last_error: Optional[Exception] = None
-        
+
         try:
             for attempt in range(1, max_retries + 1):
                 try:
@@ -174,20 +180,20 @@ class VideoDownloader:
                             console.print(f"[yellow]Tentative {attempt}/{max_retries}...[/yellow]")
                         else:
                             console.print(f"[cyan]Téléchargement de la vidéo...[/cyan]")
-                    
+
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         if progress_callback:
-                            progress_callback(10, "Récupération des métadonnées...")
-                            
+                            progress_callback(PROGRESS_METADATA, "Récupération des métadonnées...")
+
                         info = ydl.extract_info(url, download=True)
-                        
+
                         # Trouver le fichier téléchargé
                         if info:
                             filename = ydl.prepare_filename(info)
                             # Assurer l'extension .mp4
                             base = os.path.splitext(filename)[0]
                             final_path = base + '.mp4'
-                            
+
                             if os.path.exists(final_path):
                                 if progress_callback:
                                     progress_callback(100, f"Téléchargement terminé")
@@ -200,10 +206,10 @@ class VideoDownloader:
                                 else:
                                     console.print(f"[green]Vidéo téléchargée: {filename}[/green]")
                                 return filename
-                    
+
                     # Si on arrive ici, le téléchargement n'a rien produit
                     last_error = Exception("Aucun fichier produit par yt-dlp")
-                            
+
                 except Exception as e:
                     last_error = e
                     if attempt < max_retries:
@@ -222,14 +228,14 @@ class VideoDownloader:
                             progress_callback(0, f"Erreur après {max_retries} tentatives: {e}")
                         else:
                             console.print(f"[red]Erreur après {max_retries} tentatives: {e}[/red]")
-            
+
             return None
-            
+
         finally:
             self._progress_callback = None
             # Restaurer le PATH original pour éviter une mutation permanente
             os.environ["PATH"] = original_path
-    
+
     def _get_format_spec(self, quality: str) -> str:
         """
         Retourne la spécification de format pour yt-dlp

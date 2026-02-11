@@ -145,16 +145,25 @@ class GeneratedConfig:
 # DURÉES OPTIMALES PAR TYPE DE CONTENU
 # =============================================================================
 
+# Constantes de configuration
+DURATION_SHORT_MIN = 15       # Durée minimale courte (secondes)
+DURATION_SHORT_MID = 20       # Durée minimale courte-moyenne (secondes)
+DURATION_MEDIUM_MIN = 30      # Durée minimale moyenne (secondes)
+DURATION_MEDIUM_MAX = 45      # Durée maximale moyenne (secondes)
+DURATION_LONG_MIN = 60        # Durée minimale longue (secondes)
+DURATION_LONG_MID = 75        # Durée maximale longue-moyenne (secondes)
+DURATION_LONG_MAX = 90        # Durée maximale longue (secondes)
+
 CONTENT_DURATION_MAP = {
-    ContentType.COMEDY: (15, 45),
-    ContentType.MUSIC: (15, 30),
-    ContentType.TUTORIAL: (30, 60),
-    ContentType.VLOG: (30, 60),
-    ContentType.PODCAST: (60, 90),
-    ContentType.INTERVIEW: (45, 75),
-    ContentType.MOTIVATIONAL: (20, 45),
-    ContentType.NEWS: (30, 60),
-    ContentType.UNKNOWN: (30, 60),
+    ContentType.COMEDY: (DURATION_SHORT_MIN, DURATION_MEDIUM_MAX),
+    ContentType.MUSIC: (DURATION_SHORT_MIN, DURATION_MEDIUM_MIN),
+    ContentType.TUTORIAL: (DURATION_MEDIUM_MIN, DURATION_LONG_MIN),
+    ContentType.VLOG: (DURATION_MEDIUM_MIN, DURATION_LONG_MIN),
+    ContentType.PODCAST: (DURATION_LONG_MIN, DURATION_LONG_MAX),
+    ContentType.INTERVIEW: (DURATION_MEDIUM_MAX, DURATION_LONG_MID),
+    ContentType.MOTIVATIONAL: (DURATION_SHORT_MID, DURATION_MEDIUM_MAX),
+    ContentType.NEWS: (DURATION_MEDIUM_MIN, DURATION_LONG_MIN),
+    ContentType.UNKNOWN: (DURATION_MEDIUM_MIN, DURATION_LONG_MIN),
 }
 
 # Ajustements par plateforme
@@ -224,7 +233,7 @@ class QuickAnalyzer:
             """Helper pour reporter la progression"""
             if progress_callback:
                 progress_callback(percent, message)
-        
+
         # Charger l'audio avec la durée limitée
         report_progress(0, "Chargement de l'audio...")
         y, sr = librosa.load(
@@ -436,34 +445,34 @@ class QuickAnalyzer:
     ) -> Tuple[ContentType, float]:
         """
         Classifie le type de contenu en utilisant audio ET transcription.
-        
+
         Args:
             transcription_text: Texte transcrit (optionnel, améliore la précision)
         """
         scores = {ct: 0.0 for ct in ContentType}
-        
+
         # === ANALYSE PAR TRANSCRIPTION (si disponible) ===
         if transcription_text:
             text_lower = transcription_text.lower()
-            
+
             # Gaming: mots-clés gaming (élargi pour Minecraft)
             gaming_keywords = [
                 # Combat/Action
                 'kill', 'headshot', 'victory', 'victoire', 'win', 'lose', 'perdu',
                 'weapon', 'arme', 'skill', 'combo', 'damage', 'dégâts', 'attack', 'defend',
-                
+
                 # Gaming général
                 'game', 'play', 'joue', 'playing', 'gamer', 'gaming',
                 'level', 'niveau', 'boss', 'enemy', 'ennemi',
                 'gg', 'ez', 'noob', 'pro', 'clutch', 'ace', 'pentakill',
-                
+
                 # Jeux spécifiques
                 'fortnite', 'minecraft', 'valorant', 'league', 'cod', 'warzone',
                 'roblox', 'terraria', 'rust', 'apex', 'overwatch',
-                
+
                 # Streaming
                 'stream', 'twitch', 'youtube gaming', 'speedrun', 'gameplay',
-                
+
                 # Minecraft spécifique
                 'craft', 'crafting', 'mine', 'mining', 'build', 'building', 'builder',
                 'block', 'blocks', 'diamond', 'diamonds', 'creeper', 'enderman',
@@ -474,14 +483,14 @@ class QuickAnalyzer:
                 'mob', 'mobs', 'server', 'multiplayer', 'world', 'seed'
             ]
             gaming_count = sum(1 for kw in gaming_keywords if kw in text_lower)
-            
+
             # Seuil réduit : 2-3 mots-clés suffisent pour Minecraft
             if gaming_count >= 3:
                 scores[ContentType.GAMING] += 0.7  # Boost augmenté
                 console.print(f"[dim]🎮 Gaming détecté: {gaming_count} mots-clés[/dim]")
             elif gaming_count >= 2:
                 scores[ContentType.GAMING] += 0.4  # Boost modéré
-            
+
             # Comedy: expressions humoristiques
             comedy_keywords = [
                 'mdr', 'lol', 'ptdr', 'mort de rire', 'hilarant', 'dr\u00f4le',
@@ -491,7 +500,7 @@ class QuickAnalyzer:
             comedy_count = sum(1 for kw in comedy_keywords if kw in text_lower)
             if comedy_count >= 3:
                 scores[ContentType.COMEDY] += 0.5
-            
+
             # Podcast/Interview: marqueurs de conversation
             podcast_keywords = [
                 'interview', 'question', 'r\u00e9ponse', 'discussion', 'parle',
@@ -503,7 +512,7 @@ class QuickAnalyzer:
             if podcast_count >= 4:
                 scores[ContentType.PODCAST] += 0.5
                 scores[ContentType.INTERVIEW] += 0.4
-            
+
             # Tutorial: vocabulaire instructif
             tutorial_keywords = [
                 'comment', 'tutoriel', 'tutorial', 'apprendre', 'montrer',
@@ -514,7 +523,7 @@ class QuickAnalyzer:
             tutorial_count = sum(1 for kw in tutorial_keywords if kw in text_lower)
             if tutorial_count >= 5:
                 scores[ContentType.TUTORIAL] += 0.6
-            
+
             # Motivational: langage inspirant
             motivational_keywords = [
                 'motivation', 'inspir', 'r\u00e9ussir', 'succ\u00e8s', 'objectif',
@@ -525,7 +534,7 @@ class QuickAnalyzer:
             motivational_count = sum(1 for kw in motivational_keywords if kw in text_lower)
             if motivational_count >= 3:
                 scores[ContentType.MOTIVATIONAL] += 0.5
-        
+
         # === ANALYSE AUDIO (comme avant) ===
 
         # Comedy: beaucoup de rires, énergie variable, exclamations
@@ -608,7 +617,7 @@ class QuickAnalyzer:
         else:
             audio_type = best_type
             audio_confidence = min(1.0, confidence * 1.5)  # Boost légèrement la confiance
-        
+
         # ✨ NOUVEAU: Utiliser le LLM pour affiner la détection si transcription disponible
         if transcription_text and len(transcription_text) > 100:
             try:
@@ -847,25 +856,25 @@ def detect_content_type_with_llm(
 ) -> Tuple[ContentType, float, str]:
     """
     Utilise le LLM local (Phi-4-mini) pour affiner la détection du type de contenu.
-    
+
     Combine l'analyse audio avec l'analyse sémantique de la transcription pour
     améliorer la précision de détection.
-    
+
     Args:
         transcription_text: Texte transcrit (premiers ~500 mots)
         audio_based_type: Type détecté par l'analyse audio
         audio_confidence: Confiance de la détection audio (0-1)
-    
+
     Returns:
         Tuple (ContentType final, confiance finale, raisonnement)
     """
     try:
         from .local_llm import LocalLLM
-        
+
         # Prendre uniquement les premiers 500 mots pour limiter les tokens
         words = transcription_text.split()[:500]
         sample_text = ' '.join(words)
-        
+
         # Prompt pour le LLM
         prompt = f"""Tu es un expert en classification de contenu vidéo pour les réseaux sociaux (TikTok, Reels, Shorts).
 
@@ -906,7 +915,7 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
 
         # Initialiser le LLM
         llm = LocalLLM()
-        
+
         # Générer la réponse
         llm_response = llm.generate(
             prompt=prompt,
@@ -914,16 +923,16 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
             temperature=0.1,  # Bas pour plus de déterminisme
             stop=["\n\n", "TYPE:", "CONFIANCE:", "RAISON:"]
         )
-        
+
         # Extraire le texte de la réponse
         response = llm_response.text
-        
+
         # Parser la réponse
         lines = response.strip().split('\n')
         detected_type = audio_based_type  # Fallback
         confidence = audio_confidence
         reasoning = f"Détection audio: {audio_based_type.value}"
-        
+
         for line in lines:
             line = line.strip()
             if line.startswith('TYPE:'):
@@ -941,17 +950,17 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
                     'motivational': ContentType.MOTIVATIONAL,
                 }
                 detected_type = type_mapping.get(type_str, audio_based_type)
-            
+
             elif line.startswith('CONFIANCE:'):
                 try:
                     conf_str = line.replace('CONFIANCE:', '').strip().replace('%', '')
                     confidence = float(conf_str) / 100.0
                 except Exception:
                     pass
-            
+
             elif line.startswith('RAISON:'):
                 reasoning = line.replace('RAISON:', '').strip()
-        
+
         # Combiner avec l'analyse audio (pondération 70% LLM, 30% audio)
         if detected_type == audio_based_type:
             # Accord entre LLM et audio → boost confiance
@@ -959,10 +968,10 @@ RAISON: [1 phrase courte expliquant pourquoi]"""
         else:
             # Désaccord → favoriser le LLM (il comprend le contexte mieux que l'audio)
             final_confidence = confidence * 0.85
-        
+
         console.print(f"[dim]🤖 LLM: {detected_type.value} ({final_confidence:.0%}) - {reasoning}[/dim]")
         return detected_type, final_confidence, reasoning
-        
+
     except Exception as e:
         console.print(f"[yellow]⚠️ LLM indisponible: {e}[/yellow]")
         # Fallback: utiliser uniquement l'analyse audio
@@ -1022,7 +1031,7 @@ class AutoConfigurator:
             """Helper pour reporter la progression"""
             if progress_callback:
                 progress_callback(percent, message)
-        
+
         from moviepy import VideoFileClip
 
         report_progress(5, "Préparation de l'analyse...")
@@ -1037,7 +1046,7 @@ class AutoConfigurator:
 
         try:
             report_progress(10, "Extraction de l'audio...")
-            
+
             with VideoFileClip(video_path) as video:
                 if video.audio:
                     # Extraire seulement la portion nécessaire
@@ -1071,10 +1080,10 @@ class AutoConfigurator:
                 # Mapper 0-100% de l'analyzer vers 40-90% de l'étape globale
                 mapped_percent = 40 + int(percent * 0.5)
                 report_progress(mapped_percent, message)
-            
+
             analysis = self.analyzer.analyze(
-                str(audio_path), 
-                total_duration, 
+                str(audio_path),
+                total_duration,
                 transcription_text=transcription_text,
                 progress_callback=analyzer_progress
             )
@@ -1082,7 +1091,7 @@ class AutoConfigurator:
             # Générer la configuration
             report_progress(92, "Génération de la configuration optimale...")
             config = self.generator.generate(analysis, platform)
-            
+
             report_progress(95, f"Configuration générée: {analysis.content_type.value}")
 
             # Afficher les résultats si verbose
@@ -1110,12 +1119,19 @@ class AutoConfigurator:
 
         # Type de contenu
         confidence_pct = analysis.content_confidence * 100
-        console.print(f"\n  Contenu détecté: [cyan]{analysis.content_type.value}[/cyan] (confiance: {confidence_pct:.0f}%)")
+        console.print(
+            f"\n  Contenu détecté: [cyan]{analysis.content_type.value}[/cyan]"
+            f" (confiance: {confidence_pct:.0f}%)"
+        )
 
         # Profil émotionnel
         console.print(f"\n  [bold]Profil émotionnel:[/bold]")
         console.print(f"    - Énergie moyenne: {analysis.energy_profile.average:.2f}")
-        console.print(f"    - Variance: {analysis.energy_profile.variance:.2f} ({'dynamique' if analysis.energy_profile.variance > 0.15 else 'stable'})")
+        variance_label = 'dynamique' if analysis.energy_profile.variance > 0.15 else 'stable'
+        console.print(
+            f"    - Variance: {analysis.energy_profile.variance:.2f}"
+            f" ({variance_label})"
+        )
         console.print(f"    - Pics d'excitation: {analysis.excitement_peaks}")
         console.print(f"    - Émotion dominante: {analysis.dominant_emotion.value}")
 
