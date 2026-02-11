@@ -17,6 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from rich.console import Console
 
+from .ai_prompts import GLOBAL_PROMPT_TEMPLATE, PROMPT_TEMPLATE
+from .moment_processing import (
+    ViralMomentAI, TranscriptSegment,
+    parse_global_response, snap_to_sentence_boundaries,
+    parse_response, create_moment, validate_moments
+)
+
 console = Console()
 
 # Constantes de configuration
@@ -32,48 +39,8 @@ LLM_SECTION_TOP_P: float = 0.9
 LLM_SEGMENT_MAX_TOKENS: int = 200
 LLM_SEGMENT_TEMPERATURE: float = 0.1
 MAX_LLM_RETRIES: int = 3
-HOOK_MAX_LENGTH: int = 200
-EMOTION_MAX_LENGTH: int = 20
-REASON_MAX_LENGTH: int = 200
 HOOK_DISPLAY_MAX_LENGTH: int = 100
 SEGMENT_TEXT_MAX_LENGTH: int = 800
-MOMENT_MIN_SCORE_THRESHOLD: float = 0.5
-MERGE_GAP_SECONDS: float = 5.0
-DURATION_TOLERANCE_FACTOR: float = 1.2
-MIN_DURATION_FACTOR: float = 0.5
-OVERLAP_REJECTION_RATIO: float = 0.3
-SENTENCE_SEARCH_WINDOW: float = 5.0
-FALLBACK_MIN_TEXT_LENGTH: int = 50
-FALLBACK_BASE_SCORE: float = 0.4
-FALLBACK_KEYWORD_BONUS: float = 0.15
-FALLBACK_PUNCTUATION_BONUS: float = 0.1
-FALLBACK_LENGTH_BONUS: float = 0.05
-FALLBACK_LENGTH_THRESHOLD: int = 100
-FALLBACK_SCORE_CAP: float = 0.7
-FALLBACK_HOOK_PREVIEW_LENGTH: int = 50
-
-
-@dataclass
-class ViralMomentAI:
-    """Moment viral détecté par l'IA"""
-    start_time: float
-    end_time: float
-    score: float  # 0-1
-    hook: str  # Phrase d'accroche suggérée
-    reason: str  # Pourquoi c'est viral
-    emotion: str  # Émotion principale (humour, surprise, émotion, tension, etc.)
-
-    @property
-    def duration(self) -> float:
-        return self.end_time - self.start_time
-
-
-@dataclass
-class TranscriptSegment:
-    """Segment de transcription avec timestamps"""
-    start: float
-    end: float
-    text: str
 
 
 class LocalAIViralAnalyzer:
@@ -86,69 +53,6 @@ class LocalAIViralAnalyzer:
     Phi-4-mini offre de meilleures performances de raisonnement que Phi-3,
     avec le même format de prompt.
     """
-
-    # Format chat Phi-3/Phi-4 (compatible avec les deux modèles)
-    # ✨ NOUVEAU PROMPT: Analyse globale au lieu de segment par segment
-    GLOBAL_PROMPT_TEMPLATE = """<|system|>
-Tu es un expert en contenu viral pour TikTok/Reels/Shorts. Tu identifies les meilleurs moments d'une vidéo.
-Réponds UNIQUEMENT avec un tableau JSON, rien d'autre.<|end|>
-<|user|>
-Voici la transcription complète d'une vidéo de {duration:.0f}s:
-
-{transcript}
-
-MISSION:
-Identifie TOUS les moments viraux potentiels (30-90s chacun).
-
-CRITÈRES:
-- Accroche forte au début du segment
-- Émotion claire (humour, surprise, tension, inspiration)
-- Message complet et autonome
-- Potentiel de partage élevé
-
-INSTRUCTIONS:
-1. Lis TOUTE la transcription
-2. Repère TOUS les moments intéressants (pas seulement les meilleurs)
-3. Pour chaque moment, donne le timestamp de début et fin
-4. Score entre 0.0 et 1.0 (inclure aussi les moments moyens > 0.5)
-5. Cherche au moins 10-15 moments si la vidéo est longue
-
-FORMAT JSON EXACT (tableau de moments):
-[
-  {{"start": 15, "end": 45, "score": 0.85, "hook": "phrase accrocheuse", "emotion": "humour", "reason": "explication courte"}},
-  {{"start": 120, "end": 180, "score": 0.78, "hook": "autre phrase", "emotion": "surprise", "reason": "pourquoi viral"}}
-]
-
-Retourne UNIQUEMENT le tableau JSON, rien d'autre.<|end|>
-<|assistant|>
-"""
-
-    # Ancien prompt pour analyse segment par segment (fallback si vidéo très longue)
-    PROMPT_TEMPLATE = """<|system|>
-Tu es un expert en contenu viral TikTok/Reels/Shorts. Tu analyses des segments vidéo et donnes un score de viralité.
-IMPORTANT: Réponds UNIQUEMENT avec un objet JSON valide, rien d'autre.<|end|>
-<|user|>
-Évalue ce segment vidéo pour son potentiel viral:
-
-SEGMENT [{start:.0f}s - {end:.0f}s] (durée: {duration:.0f}s)
-TRANSCRIPTION: "{text}"
-
-Critères d'évaluation:
-- Accroche forte dès le début?
-- Émotion (humour, surprise, inspiration, tension)?
-- Message complet et clair?
-- Potentiel de partage?
-
-Donne un score entre 0.0 et 1.0:
-- 0.8-1.0 = Excellent potentiel viral (accroche forte + émotion + message clair)
-- 0.6-0.8 = Bon potentiel (2 critères sur 3)
-- 0.4-0.6 = Potentiel moyen (contenu correct mais pas exceptionnel)
-- 0.0-0.4 = Faible potentiel (ennuyeux, confus, ou incomplet)
-
-Réponds avec CE FORMAT JSON EXACT:
-{{"score": 0.75, "hook": "phrase accrocheuse du segment", "emotion": "type_emotion", "reason": "explication courte"}}<|end|>
-<|assistant|>
-"""
 
     def __init__(
         self,
@@ -271,7 +175,14 @@ Réponds avec CE FORMAT JSON EXACT:
 
         # Trier par score et valider (utiliser smart_max_clips)
         all_moments.sort(key=lambda m: m.score, reverse=True)
-        validated = self._validate_moments(all_moments, video_duration, max_clips_override=smart_max_clips)
+        validated = validate_moments(
+            all_moments, video_duration,
+            max_clips=self.max_clips,
+            min_duration=self.min_clip_duration,
+            max_duration=self.max_clip_duration,
+            min_viral_score=self.min_viral_score,
+            max_clips_override=smart_max_clips
+        )
 
         console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(all_moments)}[/cyan]")
 
@@ -443,7 +354,11 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                 )
 
                 # Parser la réponse
-                moments = self._parse_global_response(response.text, section_segments)
+                moments = parse_global_response(
+                    response.text, section_segments,
+                    min_duration=self.min_clip_duration,
+                    max_duration=self.max_clip_duration
+                )
 
                 # Si on a réussi à parser au moins 1 moment, c'est bon
                 if moments:
@@ -464,124 +379,6 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
                     return []
 
         return []
-
-    def _parse_global_response(self, response_text: str, segments: List[TranscriptSegment]) -> List[ViralMomentAI]:
-        """Parse la réponse globale du LLM (tableau JSON de moments)."""
-        response_text = response_text.strip()
-        moments = []
-
-        try:
-            # Extraire le tableau JSON
-            json_start = response_text.find('[')
-            json_end = response_text.rfind(']') + 1
-
-            if json_start >= 0 and json_end > json_start:
-                json_text = response_text[json_start:json_end]
-                data = json.loads(json_text)
-
-                if isinstance(data, list):
-                    for item in data:
-                        try:
-                            moment = ViralMomentAI(
-                                start_time=float(item.get('start', 0)),
-                                end_time=float(item.get('end', 0)),
-                                score=float(item.get('score', MOMENT_MIN_SCORE_THRESHOLD)),
-                                hook=item.get('hook', '')[:HOOK_MAX_LENGTH],
-                                emotion=item.get('emotion', 'neutre')[:EMOTION_MAX_LENGTH],
-                                reason=item.get('reason', '')[:REASON_MAX_LENGTH]
-                            )
-
-                            duration = moment.end_time - moment.start_time
-                            if (self.min_clip_duration <= duration <= self.max_clip_duration
-                                and moment.score >= MOMENT_MIN_SCORE_THRESHOLD):  # Seuil pour filtrer les moments de qualité
-                                moments.append(moment)
-                        except (ValueError, KeyError) as e:
-                            console.print(f"[dim]⚠️ Moment invalide ignoré: {e}[/dim]")
-                            continue
-                else:
-                    raise ValueError("Réponse n'est pas un tableau JSON")
-
-        except Exception as e:
-            console.print(f"[yellow]⚠️ Erreur parsing JSON: {e}[/yellow]")
-            console.print(f"[dim]Réponse LLM: {response_text[:200]}...[/dim]")
-
-        moments.sort(key=lambda m: m.score, reverse=True)
-
-        # Snap aux limites de phrases pour éviter de couper au milieu
-        moments = [self._snap_to_sentence_boundaries(m, segments) for m in moments]
-
-        return moments
-
-    def _snap_to_sentence_boundaries(
-        self,
-        moment: ViralMomentAI,
-        segments: List[TranscriptSegment]
-    ) -> ViralMomentAI:
-        """
-        Ajuste les timestamps pour commencer/finir sur des limites de phrases.
-
-        Cherche le début de phrase le plus proche pour start_time,
-        et la fin de phrase la plus proche pour end_time.
-        """
-        if not segments:
-            return moment
-
-        # Marge de recherche (en secondes)
-        SEARCH_WINDOW = SENTENCE_SEARCH_WINDOW
-
-        # === SNAP DU DÉBUT ===
-        # Chercher le segment qui contient ou précède start_time
-        best_start = moment.start_time
-        for seg in segments:
-            # Segment dans la fenêtre de recherche
-            if abs(seg.start - moment.start_time) <= SEARCH_WINDOW:
-                text = seg.text.strip()
-
-                # Si le segment commence par une majuscule ou après ponctuation = bon début
-                if text and (text[0].isupper() or seg.start == 0):
-                    # Préférer un début légèrement avant le timestamp LLM
-                    if seg.start <= moment.start_time:
-                        best_start = seg.start
-                        break
-                    # Ou légèrement après si pas d'autre option
-                    elif best_start == moment.start_time:
-                        best_start = seg.start
-
-        # === SNAP DE LA FIN ===
-        # Chercher la fin de phrase la plus proche de end_time
-        best_end = moment.end_time
-        for seg in segments:
-            if abs(seg.end - moment.end_time) <= SEARCH_WINDOW:
-                text = seg.text.strip()
-
-                # Si le segment finit par ponctuation forte = bonne fin
-                if text and text[-1] in '.!?':
-                    # Préférer une fin légèrement après le timestamp LLM
-                    if seg.end >= moment.end_time:
-                        best_end = seg.end
-                        break
-                    # Ou légèrement avant si pas d'autre option
-                    elif best_end == moment.end_time:
-                        best_end = seg.end
-
-        # Vérifier que la durée reste valide
-        new_duration = best_end - best_start
-        if new_duration < self.min_clip_duration:
-            # Durée trop courte, étendre la fin
-            best_end = best_start + self.min_clip_duration
-        elif new_duration > self.max_clip_duration:
-            # Durée trop longue, raccourcir la fin
-            best_end = best_start + self.max_clip_duration
-
-        # Créer un nouveau moment avec les timestamps ajustés
-        return ViralMomentAI(
-            start_time=best_start,
-            end_time=best_end,
-            score=moment.score,
-            hook=moment.hook,
-            emotion=moment.emotion,
-            reason=moment.reason
-        )
 
     def _analyze_segment_by_segment(
         self,
@@ -636,7 +433,13 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         moments.sort(key=lambda m: m.score, reverse=True)
 
         # Valider et supprimer les chevauchements
-        validated = self._validate_moments(moments, video_duration)
+        validated = validate_moments(
+            moments, video_duration,
+            max_clips=self.max_clips,
+            min_duration=self.min_clip_duration,
+            max_duration=self.max_clip_duration,
+            min_viral_score=self.min_viral_score
+        )
 
         console.print(f"[cyan]📊 Meilleurs clips retenus: {len(validated)}/{len(moments)}[/cyan]")
         return validated
@@ -692,7 +495,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         # Limiter le texte pour performance (mais garder assez de contexte)
         text = segment.text[:SEGMENT_TEXT_MAX_LENGTH]
 
-        prompt = self.PROMPT_TEMPLATE.format(
+        prompt = PROMPT_TEMPLATE.format(
             start=segment.start,
             end=segment.end,
             duration=duration,
@@ -708,233 +511,7 @@ Retourne UNIQUEMENT le tableau JSON (2-3 moments MAX), rien d'autre.<|end|>
         )
 
         # Parser la réponse JSON
-        return self._parse_response(response.text, segment)
-
-    def _parse_response(
-        self,
-        response_text: str,
-        segment: TranscriptSegment
-    ) -> Optional[ViralMomentAI]:
-        """Parse la réponse du LLM avec plusieurs stratégies de fallback"""
-
-        response_text = response_text.strip()
-
-        # Stratégie 1: Parser directement si c'est du JSON
-        if response_text.startswith('{'):
-            try:
-                data = json.loads(response_text)
-                return self._create_moment(data, segment)
-            except json.JSONDecodeError:
-                pass
-
-        # Stratégie 2: Extraire le JSON du texte
-        json_match = re.search(r'\{[^{}]*\}', response_text)
-        if json_match:
-            try:
-                data = json.loads(json_match.group())
-                return self._create_moment(data, segment)
-            except json.JSONDecodeError:
-                pass
-
-        # Stratégie 3: Extraire le score avec regex
-        score_match = re.search(r'"?score"?\s*[:=]\s*([\d.]+)', response_text)
-        if score_match:
-            try:
-                score = float(score_match.group(1))
-                # Extraire d'autres champs si possible
-                hook_match = re.search(r'"?hook"?\s*[:=]\s*"([^"]+)"', response_text)
-                emotion_match = re.search(r'"?emotion"?\s*[:=]\s*"?(\w+)"?', response_text)
-                reason_match = re.search(r'"?reason"?\s*[:=]\s*"([^"]+)"', response_text)
-
-                return ViralMomentAI(
-                    start_time=segment.start,
-                    end_time=segment.end,
-                    score=min(1.0, max(0.0, score)),
-                    hook=hook_match.group(1) if hook_match else "",
-                    emotion=emotion_match.group(1) if emotion_match else "unknown",
-                    reason=reason_match.group(1) if reason_match else ""
-                )
-            except (ValueError, AttributeError):
-                pass
-
-        # Stratégie 4: Donner un score par défaut basé sur le contenu
-        # Si le LLM n'a pas pu parser mais le segment existe, on lui donne une chance
-        if len(segment.text) > FALLBACK_MIN_TEXT_LENGTH:
-            # Score basé sur des heuristiques simples
-            text_lower = segment.text.lower()
-            base_score = FALLBACK_BASE_SCORE
-
-            # Bonus pour certains patterns
-            if any(word in text_lower for word in [
-                'incroyable', 'secret', 'révèle',
-                'découvr', 'important', 'attention'
-            ]):
-                base_score += FALLBACK_KEYWORD_BONUS
-            if any(word in text_lower for word in ['?', '!', 'pourquoi', 'comment', 'voici']):
-                base_score += FALLBACK_PUNCTUATION_BONUS
-            if len(segment.text) > FALLBACK_LENGTH_THRESHOLD:
-                base_score += FALLBACK_LENGTH_BONUS
-
-            return ViralMomentAI(
-                start_time=segment.start,
-                end_time=segment.end,
-                score=min(FALLBACK_SCORE_CAP, base_score),  # Cap à 0.7 pour le fallback
-                hook=segment.text[:FALLBACK_HOOK_PREVIEW_LENGTH] + "...",
-                emotion="unknown",
-                reason="Score estimé (parsing LLM échoué)"
-            )
-
-        return None
-
-    def _create_moment(self, data: dict, segment: TranscriptSegment) -> ViralMomentAI:
-        """Crée un ViralMomentAI à partir des données parsées"""
-        score = float(data.get("score", MOMENT_MIN_SCORE_THRESHOLD))
-        hook = str(data.get("hook", ""))
-        emotion = str(data.get("emotion", "unknown"))
-        reason = str(data.get("reason", ""))
-
-        return ViralMomentAI(
-            start_time=segment.start,
-            end_time=segment.end,
-            score=min(1.0, max(0.0, score)),
-            hook=hook[:HOOK_DISPLAY_MAX_LENGTH],
-            reason=reason[:REASON_MAX_LENGTH],
-            emotion=emotion[:EMOTION_MAX_LENGTH]
-        )
-
-    def _validate_moments(
-        self,
-        moments: List[ViralMomentAI],
-        video_duration: float,
-        max_clips_override: Optional[int] = None
-    ) -> List[ViralMomentAI]:
-        """
-        Valide, fusionne et filtre les moments détectés.
-
-        Args:
-            moments: Liste des moments à valider
-            video_duration: Durée totale de la vidéo
-            max_clips_override: Si défini, utilise cette valeur au lieu de self.max_clips
-
-        Améliorations:
-        - Utilise self.min_viral_score au lieu d'un seuil hardcodé
-        - Fusionne les moments adjacents/chevauchants
-        - Seuil de chevauchement plus strict (30% au lieu de 50%)
-        """
-
-        if not moments:
-            return []
-
-        # Trier par temps de début pour faciliter la fusion
-        moments.sort(key=lambda x: x.start_time)
-
-        # === ÉTAPE 1: Fusion des moments adjacents/chevauchants ===
-        merged = []
-        for moment in moments:
-            start = max(0, moment.start_time)
-            end = min(video_duration, moment.end_time)
-
-            if not merged:
-                merged.append(ViralMomentAI(
-                    start_time=start,
-                    end_time=end,
-                    score=moment.score,
-                    hook=moment.hook,
-                    reason=moment.reason,
-                    emotion=moment.emotion
-                ))
-                continue
-
-            last = merged[-1]
-            # Fusionner si chevauchement > 10s ou écart < 5s
-            gap = start - last.end_time
-            if gap < MERGE_GAP_SECONDS:  # Moins de 5s d'écart = fusionner
-                # Étendre le moment précédent
-                new_end = max(last.end_time, end)
-                # Limiter à max_clip_duration
-                if new_end - last.start_time <= self.max_clip_duration * DURATION_TOLERANCE_FACTOR:
-                    last.end_time = new_end
-                    # Garder le meilleur score
-                    if moment.score > last.score:
-                        last.score = moment.score
-                        last.hook = moment.hook
-                        last.reason = moment.reason
-                    continue
-
-            # Pas de fusion, ajouter comme nouveau moment
-            merged.append(ViralMomentAI(
-                start_time=start,
-                end_time=end,
-                score=moment.score,
-                hook=moment.hook,
-                reason=moment.reason,
-                emotion=moment.emotion
-            ))
-
-        # === ÉTAPE 2: Trier par score décroissant ===
-        merged.sort(key=lambda x: x.score, reverse=True)
-
-        # === ÉTAPE 3: Filtrer par score et chevauchement ===
-        valid = []
-        used_ranges = []
-
-        for moment in merged:
-            start = moment.start_time
-            end = moment.end_time
-            duration = end - start
-
-            # Vérifier la durée minimum
-            if duration < self.min_clip_duration * MIN_DURATION_FACTOR:
-                continue
-
-            # Tronquer si trop long
-            if duration > self.max_clip_duration * DURATION_TOLERANCE_FACTOR:
-                end = start + self.max_clip_duration
-                duration = end - start
-
-            # Vérifier le score (utilise le seuil configuré, pas un hardcodé)
-            if moment.score < self.min_viral_score:
-                continue
-
-            # Vérifier le chevauchement (seuil strict: 30%)
-            overlap = False
-            for used_start, used_end in used_ranges:
-                overlap_start = max(start, used_start)
-                overlap_end = min(end, used_end)
-                if overlap_end > overlap_start:
-                    overlap_duration = overlap_end - overlap_start
-                    # Rejet si > 30% de chevauchement (plus strict que 50%)
-                    if overlap_duration > duration * OVERLAP_REJECTION_RATIO:
-                        overlap = True
-                        break
-
-            if overlap:
-                continue
-
-            # Ajouter le moment validé
-            moment.start_time = start
-            moment.end_time = end
-            valid.append(moment)
-            used_ranges.append((start, end))
-
-            # Limiter au nombre max de clips (utiliser override si fourni)
-            effective_max_clips = max_clips_override if max_clips_override is not None else self.max_clips
-            if len(valid) >= effective_max_clips:
-                break
-
-        # Fallback: si aucun moment valide, prendre le meilleur candidat
-        if not valid and merged:
-            best = merged[0]
-            best.start_time = max(0, best.start_time)
-            best.end_time = min(video_duration, best.end_time)
-            if best.end_time - best.start_time < self.min_clip_duration:
-                best.end_time = min(video_duration, best.start_time + self.min_clip_duration)
-            console.print(f"[dim]Fallback: meilleur score {best.score:.0%}[/dim]")
-            return [best]
-
-        # Trier par temps pour l'export
-        valid.sort(key=lambda x: x.start_time)
-        return valid
+        return parse_response(response.text, segment)
 
 
 def analyze_with_ai(
