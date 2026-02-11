@@ -27,15 +27,23 @@ logging.getLogger("llama_cpp").setLevel(logging.ERROR)
 
 # URLs de téléchargement des modèles GGUF (sources publiques)
 MODEL_DOWNLOADS = {
+    "qwen2.5-7b": {
+        "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
+        "filename": "qwen2.5-7b-instruct-q4_k_m.gguf",
+        "size_gb": 4.7,
+        "format": "chatml",  # <|im_start|>role\n...<|im_end|>
+    },
     "phi-4-mini": {
         "url": "https://huggingface.co/lmstudio-community/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
         "filename": "Phi-4-mini-instruct-Q4_K_M.gguf",
-        "size_gb": 2.5,  # Taille approximative
+        "size_gb": 2.5,
+        "format": "phi",
     },
     "phi-3-mini": {
         "url": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
         "filename": "Phi-3-mini-4k-instruct-q4.gguf",
         "size_gb": 2.2,
+        "format": "phi",
     },
 }
 
@@ -227,7 +235,11 @@ class LocalLLM:
         # Charger le modèle
         # Détecter le type de modèle pour afficher le bon message
         model_name = Path(model_path).name.lower()
-        if 'phi-4' in model_name or 'phi4' in model_name:
+        if 'qwen' in model_name:
+            model_display = "Qwen2.5-7B"
+            # Qwen2.5-7B est plus gros, ajuster le contexte
+            n_ctx = get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT)
+        elif 'phi-4' in model_name or 'phi4' in model_name:
             model_display = "Phi-4-mini"
             # 🚀 Optimisation: Contexte dynamique selon RAM disponible
             n_ctx = get_optimal_context_size(max_ram_usage_percent=MAX_RAM_USAGE_PERCENT)
@@ -407,10 +419,15 @@ class LocalLLM:
 
     @staticmethod
     def _find_model() -> Optional[str]:
-        """Cherche le modèle GGUF dans les emplacements courants (Phi-4 prioritaire)"""
-        # Noms possibles du modèle - Phi-4 en priorité, puis Phi-3 en fallback
+        """Cherche le modèle GGUF dans les emplacements courants (Qwen2.5 > Phi-4 > Phi-3)"""
+        # Noms possibles du modèle - Qwen2.5-7B en priorité, puis Phi-4, puis Phi-3
         model_names = [
-            # Phi-4-mini (recommandé) - différentes conventions de nommage
+            # Qwen2.5-7B (recommandé pour v2 — meilleur JSON, meilleur raisonnement)
+            "qwen2.5-7b-instruct-q4_k_m.gguf",
+            "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+            "qwen2.5-7b-instruct.Q4_K_M.gguf",
+            "Qwen2.5-7B-Instruct.Q4_K_M.gguf",
+            # Phi-4-mini (fallback principal)
             "Phi-4-mini-instruct.Q4_K_M.gguf",    # Format HuggingFace standard
             "Phi-4-mini-instruct-Q4_K_M.gguf",
             "Phi-4-mini-instruct-q4_k_m.gguf",
@@ -419,7 +436,7 @@ class LocalLLM:
             "phi-4-mini-instruct-q4_k_m.gguf",
             "Phi-4-mini-Q4_K_M.gguf",
             "phi4-mini-instruct-q4.gguf",
-            # Phi-3-mini (fallback)
+            # Phi-3-mini (dernier fallback)
             "Phi-3-mini-4k-instruct-q4.gguf",
             "phi-3-mini-4k-instruct-q4.gguf",
             "Phi-3-mini-4k-instruct-Q4_K_M.gguf",
@@ -447,9 +464,14 @@ class LocalLLM:
 
         # Modèle non trouvé: proposer le téléchargement automatique
         console.print("[yellow]⚠ Modèle LLM non trouvé localement[/yellow]")
-        console.print("[cyan]Téléchargement automatique de Phi-4-mini...[/cyan]")
+        console.print("[cyan]Téléchargement automatique de Qwen2.5-7B...[/cyan]")
 
-        # Essayer Phi-4-mini d'abord, puis Phi-3-mini en fallback
+        # Essayer Qwen2.5-7B d'abord, puis Phi-4-mini, puis Phi-3-mini
+        downloaded_path = LocalLLM._download_model("qwen2.5-7b")
+        if downloaded_path:
+            return downloaded_path
+
+        console.print("[yellow]Échec Qwen2.5-7B, essai avec Phi-4-mini...[/yellow]")
         downloaded_path = LocalLLM._download_model("phi-4-mini")
         if downloaded_path:
             return downloaded_path

@@ -206,47 +206,94 @@ def process_video(job_id: str, url: str, options: dict, jobs: dict, jobs_lock: t
 
         moments = []
 
+        # === Pipeline v2 (multi-signal : LLM + audio + structural) ===
         if options.get('use_ai', True) and transcription_result:
-            # Transcription déjà faite, passer directement à l'analyse
+            try:
+                from src.v2.pipeline import ViralDetectorV2
+                from src.v2.models import PipelineConfig, TranscriptSegment as V2Segment, WordTimestamp as V2Word
+
+                logger.log("Pipeline v2 multi-signal...", "info", "analyze", 5)
+
+                # Convertir les segments et mots vers le format v2
+                v2_segments = [
+                    V2Segment(start=s.start, end=s.end, text=s.text)
+                    for s in transcription_result.segments
+                ] if transcription_result.segments else None
+
+                v2_words = [
+                    V2Word(word=w.word, start=w.start, end=w.end)
+                    for w in transcription_result.words
+                ] if transcription_result.words else None
+
+                # Configuration du pipeline v2
+                effective_max_clips = max_clips or DEFAULT_MAX_CLIPS
+                v2_config = PipelineConfig(
+                    min_clip_duration=float(min_duration),
+                    max_clip_duration=float(max_duration),
+                    max_clips=effective_max_clips,
+                    min_viral_score=float(min_score),
+                )
+
+                detector_v2 = ViralDetectorV2(config=v2_config)
+
+                # Callback pour la progression de l'analyse v2
+                def v2_progress_callback(progress: float, message: str):
+                    mapped_progress = int(5 + progress * 90)
+                    logger.log(message, "info", "analyze", mapped_progress)
+
+                moments = detector_v2.detect(
+                    video_path=video_path,
+                    transcript_segments=v2_segments,
+                    words=v2_words,
+                    content_type=detected_content_type,
+                    progress_callback=v2_progress_callback,
+                )
+
+                if moments:
+                    logger.log(f"Pipeline v2 : {len(moments)} moments viraux detectes", "info", "analyze", 95)
+                else:
+                    logger.log("Pipeline v2 : aucun moment suffisamment viral", "warning", "analyze", 95)
+
+            except ImportError as e:
+                logger.log(f"Pipeline v2 non disponible ({e}), fallback ancien systeme", "warning", "analyze", 10)
+                moments = []
+            except Exception as e:
+                logger.log(f"Erreur pipeline v2: {e}, fallback ancien systeme", "warning", "analyze", 10)
+                moments = []
+
+        # === FALLBACK v1 : ancien systeme AI + audio si v2 n'a rien donne ===
+        if not moments and options.get('use_ai', True) and transcription_result:
             try:
                 if transcription_result.segments:
-                    # Durée vidéo
-                    logger.log("Analyse de la structure vidéo...", "info", "analyze", 5)
+                    logger.log("Fallback v1 : analyse IA classique...", "info", "analyze", 10)
                     from moviepy import VideoFileClip
                     with VideoFileClip(video_path) as video:
                         video_duration = video.duration
 
-                    # Analyse IA
-                    logger.log("Détection des moments clés...", "info", "analyze", 10)
                     transcript_segments = [
                         TranscriptSegment(start=s.start, end=s.end, text=s.text)
                         for s in transcription_result.segments
                     ]
 
-                    # Callback pour la progression de l'analyse IA
                     def ai_progress_callback(progress: float, message: str):
-                        # Mapper la progression IA (0-1) sur la plage 10-95% de l'étape analyze
                         mapped_progress = int(10 + progress * 85)
                         logger.log(message, "info", "analyze", mapped_progress)
 
-                    # Utilise le LLM local Phi-4-mini
-                    logger.log("Détection moments viraux...", "info", "analyze", 15)
                     ai_moments = analyze_with_ai(
                         segments=transcript_segments,
                         video_duration=video_duration,
                         min_duration=min_duration,
                         max_duration=max_duration,
-                        max_clips=max_clips or DEFAULT_MAX_CLIPS,  # Défaut réduit de 10 à 5
-                        min_viral_score=min_score,  # Propager le seuil utilisateur
+                        max_clips=max_clips or DEFAULT_MAX_CLIPS,
+                        min_viral_score=min_score,
                         video_path=video_path,
                         progress_callback=ai_progress_callback,
-                        content_type=detected_content_type  # Adapter l'analyse au type de contenu
+                        content_type=detected_content_type
                     )
 
-                    logger.log(f"IA a retourné {len(ai_moments)} moments", "info", "analyze", 95)
+                    logger.log(f"IA v1 : {len(ai_moments)} moments", "info", "analyze", 95)
 
-                    # Convertir tous les moments (déjà filtrés par min_viral_score)
-                    all_moments = [
+                    moments = [
                         ViralMoment(
                             start_time=ai_m.start_time,
                             end_time=ai_m.end_time,
@@ -256,16 +303,8 @@ def process_video(job_id: str, url: str, options: dict, jobs: dict, jobs_lock: t
                         for ai_m in ai_moments
                     ]
 
-                    # Les moments sont déjà filtrés par l'analyseur, pas besoin de re-filtrer
-                    moments = all_moments
-
-                    if moments:
-                        logger.log(f"{len(moments)} moments viraux détectés", "info", "analyze", 98)
-                    else:
-                        logger.log("L'IA n'a trouvé aucun moment suffisamment viral", "warning", "analyze", 98)
-
             except Exception as e:
-                logger.log(f"Erreur analyse IA: {e}", "error", "analyze", 90)
+                logger.log(f"Erreur analyse IA v1: {e}", "error", "analyze", 90)
                 moments = []
 
         # === FALLBACK: Analyse audio/vidéo si l'IA n'a rien trouvé ===
