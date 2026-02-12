@@ -20,6 +20,7 @@ from ..viral_detector import ViralMoment
 from .audio_features import AudioFeatureExtractor
 from .fusion import ScoreFusion
 from .models import (
+
     AudioEngagementScore,
     ContentType,
     LLMScoredMoment,
@@ -37,6 +38,11 @@ _PROGRESS_AUDIO_FEATURES: float = 0.20
 _PROGRESS_AUDIO_SCORES: float = 0.05
 _PROGRESS_LLM_ANALYSIS: float = 0.60
 _PROGRESS_FUSION: float = 0.10
+
+# Ratios de redistribution du poids LLM en mode degrade (somme = 1.0)
+_FALLBACK_LLM_TO_AUDIO_RATIO: float = 0.50
+_FALLBACK_LLM_TO_SPEECH_RATIO: float = 0.30
+_FALLBACK_LLM_TO_STRUCTURAL_RATIO: float = 0.20
 _PROGRESS_CONVERSION: float = 0.05
 
 
@@ -491,9 +497,9 @@ class ViralDetectorV2:
                 'redistribution des poids vers l\'audio[/yellow]'
             )
             llm_weight = config.weight_llm
-            config.weight_audio += llm_weight * 0.50
-            config.weight_speech += llm_weight * 0.30
-            config.weight_structural += llm_weight * 0.20
+            config.weight_audio += llm_weight * _FALLBACK_LLM_TO_AUDIO_RATIO
+            config.weight_speech += llm_weight * _FALLBACK_LLM_TO_SPEECH_RATIO
+            config.weight_structural += llm_weight * _FALLBACK_LLM_TO_STRUCTURAL_RATIO
             config.weight_llm = 0.0
 
         # Abaisser le seuil minimum en mode degrade pour ne pas tout filtrer

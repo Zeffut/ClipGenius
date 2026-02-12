@@ -26,6 +26,9 @@ _OVERLAP_REMOVAL_RATIO: float = 0.30
 _EDGE_PENALTY_SECONDS: float = 10.0
 _EDGE_PENALTY_VALUE: float = 0.10
 
+# Fraction minimale de chevauchement pour considerer un pic couvert par le LLM
+_PEAK_COVERAGE_THRESHOLD: float = 0.50
+
 # Bonus pour une duree proche de la duree cible
 _DURATION_BONUS_MAX: float = 0.08
 
@@ -394,7 +397,7 @@ class ScoreFusion:
             inter_end = min(peak_end, moment.end)
             intersection = max(0.0, inter_end - inter_start)
 
-            if intersection / peak_duration > 0.50:
+            if intersection / peak_duration > _PEAK_COVERAGE_THRESHOLD:
                 return True
 
         return False

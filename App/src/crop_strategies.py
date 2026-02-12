@@ -190,6 +190,9 @@ class CenterWeightedStrategy(CropStrategy):
         self._prev_gray = None
 
 
+# Facteur de normalisation pour convertir la magnitude de mouvement en confiance
+_MOTION_CONFIDENCE_SCALE: int = 50
+
 class MotionTrackingStrategy(CropStrategy):
     """
     Stratégie de tracking basée sur le mouvement.
@@ -232,7 +235,7 @@ class MotionTrackingStrategy(CropStrategy):
             if moments['m00'] > 1000:  # Seuil minimum de mouvement
                 target_x = moments['m10'] / moments['m00'] / w
                 target_y = moments['m01'] / moments['m00'] / h
-                confidence = min(0.9, moments['m00'] / (w * h * 50))
+                confidence = min(0.9, moments['m00'] / (w * h * _MOTION_CONFIDENCE_SCALE))
 
         # Lissage exponentiel vers la cible
         self._smooth_x = self._smooth_x + self.reactivity * (target_x - self._smooth_x)

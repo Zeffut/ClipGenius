@@ -43,6 +43,10 @@ YOUTUBE_WIDTH = 1280            # Largeur standard 16:9
 YOUTUBE_HEIGHT = 720            # Hauteur standard 16:9
 SQUARE_SIZE = 1080              # Taille standard 1:1
 PREVIEW_WIDTH = 540             # Largeur aperçu 9:16 demi-résolution
+
+# Seuils d'ecart-type de niveaux de gris pour le scoring de contraste
+_CONTRAST_HIGH_THRESHOLD: float = 50.0
+_CONTRAST_MEDIUM_THRESHOLD: float = 30.0
 PREVIEW_HEIGHT = 960            # Hauteur aperçu 9:16 demi-résolution
 
 
@@ -397,9 +401,9 @@ class ThumbnailGenerator:
 
         # 4. Contraste
         contrast = np.std(gray)
-        if contrast > 50:
+        if contrast > _CONTRAST_HIGH_THRESHOLD:
             score += 15
-        elif contrast > 30:
+        elif contrast > _CONTRAST_MEDIUM_THRESHOLD:
             score += 8
 
         return score

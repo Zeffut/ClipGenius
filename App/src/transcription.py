@@ -12,6 +12,10 @@ from rich.console import Console
 
 console = Console()
 
+# Seuil au-dela duquel un premier rapport de progression Whisper est considere
+# comme un artefact tqdm (saut de 0% a >50% immediatement)
+_TQDM_BUG_PROGRESS_THRESHOLD: int = 50
+
 
 class TeeStderr:
     """Wrapper stderr qui capture la sortie ET extrait la progression tqdm."""
@@ -190,7 +194,7 @@ def transcribe_with_mlx(
 
         # Ignorer les sauts suspects (bug tqdm qui affiche 100% au début)
         # Si on passe directement de 0% à >50%, c'est probablement un bug
-        if not first_progress_received and whisper_pct > 50:
+        if not first_progress_received and whisper_pct > _TQDM_BUG_PROGRESS_THRESHOLD:
             # Premier message et déjà >50% ? Ignorer, c'est un bug tqdm
             continue
 
