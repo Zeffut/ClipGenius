@@ -37,6 +37,10 @@ SPEED_SMOOTHING_ALPHA_MIN = 0.05
 SPEED_SMOOTHING_DIFF_FACTOR = 0.5
 NOTIFY_INTERVAL_SECONDS = 0.25
 
+# Serveur Flask embarque
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 5001
+
 MODELS_DIR = "models"
 # Phi-4-mini-instruct (recommandé, meilleure qualité)
 PHI4_MODEL_NAME = "Phi-4-mini-instruct.Q4_K_M.gguf"
@@ -508,7 +512,7 @@ def run_main_app():
 
         # Démarrer Flask en arrière-plan avec thread daemon
         flask_thread = threading.Thread(
-            target=lambda: flask_app.run(host='127.0.0.1', port=5001, debug=False, threaded=True, use_reloader=False),
+            target=lambda: flask_app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False, threaded=True, use_reloader=False),
             daemon=True,
             name="FlaskServer"
         )
@@ -533,7 +537,7 @@ def run_main_app():
         # Créer la fenêtre native avec l'API
         window = webview.create_window(
             title='ClipGenius',
-            url='http://127.0.0.1:5001',
+            url=f'http://{SERVER_HOST}:{SERVER_PORT}',
             width=1200,
             height=800,
             resizable=False,  # Taille fixe, pas de resize
@@ -567,11 +571,11 @@ def run_main_app():
         import webbrowser
 
         threading.Thread(
-            target=lambda: (time.sleep(1), webbrowser.open('http://127.0.0.1:5001')),
+            target=lambda: (time.sleep(1), webbrowser.open(f'http://{SERVER_HOST}:{SERVER_PORT}')),
             daemon=True
         ).start()
 
-        flask_app.run(host='127.0.0.1', port=5001, debug=False, threaded=True, use_reloader=False)
+        flask_app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False, threaded=True, use_reloader=False)
 
 
 def main():

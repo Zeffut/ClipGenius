@@ -52,6 +52,10 @@ SOCKETIO_PING_INTERVAL = 25         # Ping toutes les 25 secondes
 SOCKETIO_MAX_BUFFER_MB = 10         # Taille max des messages HTTP en Mo
 HEARTBEAT_DEFAULT_PROGRESS = 50     # Progression par défaut du heartbeat
 
+# Serveur Flask/SocketIO
+SERVER_HOST = '127.0.0.1'
+SERVER_PORT = 5001
+
 app = Flask(__name__, template_folder='web/templates')
 app.config['SECRET_KEY'] = os.urandom(24).hex()
 
@@ -60,7 +64,7 @@ app.config['SECRET_KEY'] = os.urandom(24).hex()
 # ping_timeout/ping_interval élevés pour les longues opérations (transcription, génération)
 socketio = SocketIO(
     app,
-    cors_allowed_origins=["http://127.0.0.1:5001", "http://localhost:5001"],
+    cors_allowed_origins=[f"http://{SERVER_HOST}:{SERVER_PORT}", f"http://localhost:{SERVER_PORT}"],
     async_mode='threading',
     ping_timeout=SOCKETIO_PING_TIMEOUT,
     ping_interval=SOCKETIO_PING_INTERVAL,
@@ -625,8 +629,8 @@ if __name__ == '__main__':
 
     print("="*50)
     print("  ClipGenius - Interface Web")
-    print("  http://localhost:5001")
+    print(f"  http://localhost:{SERVER_PORT}")
     print("="*50 + "\n")
 
     # Utiliser socketio.run() pour supporter WebSocket
-    socketio.run(app, debug=True, host='127.0.0.1', port=5001)
+    socketio.run(app, debug=True, host=SERVER_HOST, port=SERVER_PORT)
