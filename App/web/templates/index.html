@@ -27,7 +27,35 @@
             --warning: #ce9178;
             --titlebar-bg: #323233;
             --sidebar-width: 240px;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --accent-glow: rgba(0, 122, 204, 0.3);
+            --scrollbar-thumb: #555;
+            --scrollbar-thumb-hover: #777;
         }
+
+        [data-theme="light"] {
+            --bg: #f5f5f5;
+            --bg-secondary: #e8e8e8;
+            --surface: #ffffff;
+            --surface-hover: #eaeaea;
+            --border: #d1d1d1;
+            --text: #1e1e1e;
+            --text-muted: #6e6e6e;
+            --accent: #005fb8;
+            --accent-hover: #004c99;
+            --success: #16825d;
+            --error: #d32f2f;
+            --warning: #b8600a;
+            --titlebar-bg: #dddddd;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --accent-glow: rgba(0, 95, 184, 0.2);
+            --scrollbar-thumb: #c1c1c1;
+            --scrollbar-thumb-hover: #a1a1a1;
+        }
+
+        /* Theme toggle icon switching */
+        [data-theme="light"] #themeIconLight { display: none !important; }
+        [data-theme="light"] #themeIconDark { display: block !important; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
@@ -169,7 +197,7 @@
         .nav-item.active {
             background: var(--accent) !important;
             color: white !important;
-            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+            box-shadow: 0 2px 8px var(--accent-glow);
         }
 
         .nav-item.disabled {
@@ -435,7 +463,7 @@
             outline: none;
             border-color: var(--accent);
             background: var(--bg-secondary);
-            box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+            box-shadow: 0 0 0 3px var(--accent-glow);
             transform: translateY(-1px);
         }
 
@@ -455,7 +483,7 @@
             font-weight: 600;
             text-align: center;
             font-variant-numeric: tabular-nums;
-            box-shadow: 0 2px 8px rgba(0, 122, 204, 0.3);
+            box-shadow: 0 2px 8px var(--accent-glow);
             transition: all 0.2s ease;
         }
 
@@ -476,12 +504,12 @@
             height: 6px;
             background: linear-gradient(
                 to right,
-                #4ec9b0 0%,      /* Vert (permissif) */
-                #ce9178 50%,     /* Orange (moyen) */
-                #f48771 100%     /* Rouge (strict) */
+                var(--success) 0%,      /* Vert (permissif) */
+                var(--warning) 50%,     /* Orange (moyen) */
+                var(--error) 100%     /* Rouge (strict) */
             );
             border-radius: 3px;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 1px 3px var(--shadow-color);
         }
 
         input[type="range"]::-moz-range-track {
@@ -489,12 +517,12 @@
             height: 6px;
             background: linear-gradient(
                 to right,
-                #4ec9b0 0%,
-                #ce9178 50%,
-                #f48771 100%
+                var(--success) 0%,
+                var(--warning) 50%,
+                var(--error) 100%
             );
             border-radius: 3px;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 1px 3px var(--shadow-color);
         }
 
         /* Thumb - Le curseur rond */
@@ -507,7 +535,7 @@
             border: 3px solid var(--accent);
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 8px var(--shadow-color);
             transition: all 0.2s ease;
         }
 
@@ -518,32 +546,32 @@
             border: 3px solid var(--accent);
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 8px var(--shadow-color);
             transition: all 0.2s ease;
         }
 
         /* Hover effects */
         input[type="range"]:hover::-webkit-slider-thumb {
             transform: scale(1.2);
-            box-shadow: 0 3px 12px rgba(0, 122, 204, 0.5);
+            box-shadow: 0 3px 12px var(--accent-glow);
         }
 
         input[type="range"]:hover::-moz-range-thumb {
             transform: scale(1.2);
-            box-shadow: 0 3px 12px rgba(0, 122, 204, 0.5);
+            box-shadow: 0 3px 12px var(--accent-glow);
         }
 
         /* Active (dragging) */
         input[type="range"]:active::-webkit-slider-thumb {
             transform: scale(1.3);
             border-width: 4px;
-            box-shadow: 0 4px 16px rgba(0, 122, 204, 0.6);
+            box-shadow: 0 4px 16px var(--accent-glow);
         }
 
         input[type="range"]:active::-moz-range-thumb {
             transform: scale(1.3);
             border-width: 4px;
-            box-shadow: 0 4px 16px rgba(0, 122, 204, 0.6);
+            box-shadow: 0 4px 16px var(--accent-glow);
         }
 
         /* Focus state */
@@ -574,11 +602,11 @@
         }
 
         .range-labels span:first-child {
-            color: #4ec9b0;
+            color: var(--success);
         }
 
         .range-labels span:last-child {
-            color: #f48771;
+            color: var(--error);
         }
 
         /* Animation de la valeur quand elle change */
@@ -667,7 +695,7 @@
             background: var(--surface-hover);
             border-color: var(--accent);
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px var(--shadow-color);
         }
 
         .checkbox-label input[type="checkbox"]:checked + span {
@@ -810,7 +838,7 @@
         .progress-hero {
             text-align: center;
             padding: 60px 40px;
-            background: linear-gradient(135deg, rgba(0, 120, 212, 0.05) 0%, rgba(0, 164, 239, 0.05) 100%);
+            background: linear-gradient(135deg, var(--accent-glow) 0%, rgba(0, 164, 239, 0.05) 100%);
             border-radius: 16px;
             border: 1px solid var(--border);
             position: relative;
@@ -826,7 +854,7 @@
             right: 0;
             bottom: 0;
             background-image: 
-                radial-gradient(circle at 20% 80%, rgba(0, 120, 212, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 20% 80%, var(--accent-glow) 0%, transparent 50%),
                 radial-gradient(circle at 80% 20%, rgba(0, 164, 239, 0.1) 0%, transparent 50%);
             animation: bgPulse 4s ease-in-out infinite alternate;
         }
@@ -977,7 +1005,7 @@
             border-color: var(--accent);
             color: white;
             transform: scale(1.05);
-            box-shadow: 0 4px 20px rgba(0, 120, 212, 0.3);
+            box-shadow: 0 4px 20px var(--accent-glow);
         }
 
         .progress-step.active .progress-step-icon {
@@ -1321,12 +1349,12 @@
 
         .file-drop-zone:hover {
             border-color: var(--accent);
-            background: rgba(0, 122, 204, 0.05);
+            background: var(--accent-glow);
         }
 
         .file-drop-zone.dragover {
             border-color: var(--accent);
-            background: rgba(0, 122, 204, 0.1);
+            background: var(--accent-glow);
             transform: scale(1.01);
         }
 
@@ -1386,7 +1414,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 122, 204, 0.1);
+            background: var(--accent-glow);
             border-radius: 10px;
             color: var(--accent);
         }
@@ -1425,8 +1453,8 @@
 
         .file-remove-btn:hover {
             background: rgba(255, 100, 100, 0.1);
-            border-color: #ff6464;
-            color: #ff6464;
+            border-color: var(--error);
+            color: var(--error);
         }
         
         /* Preset Cards (Type de contenu) */
@@ -1504,7 +1532,7 @@
             margin-top: 20px;
             margin-bottom: 20px;
             animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 8px 24px var(--shadow-color);
             position: relative;
             overflow: hidden;
         }
@@ -1547,7 +1575,7 @@
         .youtube-preview-error-icon svg {
             width: 32px;
             height: 32px;
-            color: #ef4444;
+            color: var(--error);
         }
         
         .youtube-preview-error-title {
@@ -1582,7 +1610,7 @@
             position: relative;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 8px 20px var(--shadow-color);
             aspect-ratio: 16 / 9;
         }
         
@@ -1729,7 +1757,24 @@
         </div>
         <div class="titlebar-center" id="titlebarStatus"></div>
         <div class="titlebar-actions">
-            <!-- Bouton dossier supprimé - clips automatiquement dans ~/Téléchargements -->
+            <button class="titlebar-btn" id="themeToggle" title="Changer de thème" onclick="toggleTheme()">
+                <!-- Soleil (affiché en mode sombre) -->
+                <svg id="themeIconLight" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <!-- Lune (affiché en mode clair) -->
+                <svg id="themeIconDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -2249,6 +2294,39 @@
     </div>
 
     <script>
+        // === THEME MANAGEMENT ===
+        function getSystemTheme() {
+            return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            const iconLight = document.getElementById('themeIconLight');
+            const iconDark = document.getElementById('themeIconDark');
+            if (iconLight) iconLight.style.display = theme === 'dark' ? 'block' : 'none';
+            if (iconDark) iconDark.style.display = theme === 'light' ? 'block' : 'none';
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || getSystemTheme();
+            const next = current === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('clipgenius-theme', next);
+            applyTheme(next);
+        }
+
+        // Initialisation immédiate du thème (avant le rendu)
+        (function() {
+            const saved = localStorage.getItem('clipgenius-theme');
+            applyTheme(saved || getSystemTheme());
+
+            // Écouter les changements de thème de l'OS (auto-switch si pas de choix manuel)
+            window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function(e) {
+                if (!localStorage.getItem('clipgenius-theme')) {
+                    applyTheme(e.matches ? 'light' : 'dark');
+                }
+            });
+        })();
+
         // === DOM ELEMENTS ===
         const progressSection = document.getElementById('progressSection');
         const progressStatus = document.getElementById('progressStatus');
@@ -2847,7 +2925,13 @@
         function celebrate() {
             celebrationOverlay.classList.add('active');
             
-            const colors = ['#007acc', '#4ec9b0', '#ce9178', '#f48771'];
+            const style = getComputedStyle(document.documentElement);
+            const colors = [
+                style.getPropertyValue('--accent').trim(),
+                style.getPropertyValue('--success').trim(),
+                style.getPropertyValue('--warning').trim(),
+                style.getPropertyValue('--error').trim()
+            ];
             for (let i = 0; i < 50; i++) {
                 setTimeout(() => {
                     const confetti = document.createElement('div');
