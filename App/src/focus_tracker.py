@@ -658,7 +658,7 @@ class FocusTracker:
             return points
 
         smoothed = []
-        window = 3  # Fenêtre de lissage
+        window = 5  # Fenêtre de lissage
 
         for i, fp in enumerate(points):
             # Fenêtre autour du point actuel

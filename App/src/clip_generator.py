@@ -14,7 +14,6 @@ from moviepy import VideoFileClip
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 
 from .viral_detector import ViralMoment, ViralMomentDetector
 from .smart_cropper import (
@@ -52,10 +51,6 @@ try:
     HOOK_OPTIMIZER_AVAILABLE = True
 except ImportError:
     HOOK_OPTIMIZER_AVAILABLE = False
-
-# Cache global pour les frames décodées (économise du temps de décodage)
-_frame_cache = {}
-_cache_lock = threading.Lock()
 
 # Constantes de configuration
 DEFAULT_OUTPUT_WIDTH: int = 1080            # Largeur de sortie par défaut (pixels)
@@ -597,10 +592,6 @@ class ClipGenerator:
             except Exception:
                 pass
 
-        # Nettoyer le cache de frames
-        global _frame_cache
-        with _cache_lock:
-            _frame_cache.clear()
         gc.collect()
 
         # Nettoyer le fichier audio sanitisé temporaire
@@ -629,15 +620,6 @@ class ClipGenerator:
         """
         if frame is None or frame.size == 0:
             return np.zeros((self.config.output_height, self.config.output_width, 3), dtype=np.uint8)
-
-        # Clé de cache basée sur timestamp (arrondi à 0.1s pour éviter trop de variations)
-        cache_key = f"{timestamp:.1f}"
-
-        # Vérifier le cache (désactivé en mode parallèle pour éviter les race conditions)
-        if not self.config.parallel_processing:
-            with _cache_lock:
-                if cache_key in _frame_cache:
-                    return _frame_cache[cache_key].copy()
 
         h, w = frame.shape[:2]
 
@@ -703,16 +685,6 @@ class ClipGenerator:
 
             if self.config.enable_sharpening:
                 result = apply_sharpening(result, self.config.sharpening_strength)
-
-        # Mettre en cache le résultat (limiter la taille du cache à 100 frames max)
-        if not self.config.parallel_processing:
-            with _cache_lock:
-                if len(_frame_cache) > 100:
-                    keys_to_remove = list(_frame_cache.keys())[:20]
-                    for key in keys_to_remove:
-                        del _frame_cache[key]
-
-                _frame_cache[cache_key] = result.copy()
 
         return result
 
