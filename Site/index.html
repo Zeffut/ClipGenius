@@ -3,287 +3,479 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ClipGenius - Transform long-form videos into viral short-form clips with AI-powered analysis. 100% local processing.">
-    <meta name="keywords" content="video clip generator, TikTok, AI video, short-form video, automatic video editing">
-    <title>ClipGenius - AI-Powered Video Clip Generator</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="description" content="ClipGenius — AI-powered video clip generator. Turn long videos into viral short-form clips. 100% local, 100% free.">
+    <meta name="keywords" content="video clip generator, AI video, TikTok clips, short-form video, automatic editing, open source">
+    <meta property="og:title" content="ClipGenius — AI Video Clip Generator">
+    <meta property="og:description" content="Turn hours of video into viral clips. Automatically. Free.">
+    <title>ClipGenius — AI Video Clip Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Rybbit Tracking -->
-    <script
-        src="https://tracking.zeffut.fr/api/script.js"
-        data-site-id="7b94ee2e15ae"
-        defer
-    ></script>
+    <script src="https://tracking.zeffut.fr/api/script.js" data-site-id="7b94ee2e15ae" defer></script>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="nav-wrapper">
-            <a href="#" class="logo">ClipGenius</a>
+
+    <div class="noise" aria-hidden="true"></div>
+
+    <!-- ── NAV ── -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-inner">
+            <a href="#" class="logo">
+                <span class="logo-mark">CG</span>
+                ClipGenius
+            </a>
             <div class="nav-links">
-                <a href="#solution" class="nav-link">Solution</a>
-                <a href="#benefits" class="nav-link">Benefits</a>
-                <a href="https://github.com/Zeffut/ClipGenius" target="_blank" class="nav-link github">GitHub</a>
+                <a href="#how" class="nav-link">How it works</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="nav-cta">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                    GitHub
+                </a>
             </div>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="hero-wrapper">
-            <div class="hero-grid">
-                <div class="hero-content">
-                    <h1 class="hero-title">
-                        Save Hours<br>Every Week
-                    </h1>
-                    <p class="hero-subtitle">
-                        Creators spend 2-3 hours finding and editing clips from one video. ClipGenius does it in minutes. Automatically. Free.
-                    </p>
-                    <div class="hero-cta">
-                        <a href="https://github.com/Zeffut/ClipGenius" target="_blank" class="btn btn-primary">Get Started</a>
-                        <a href="#solution" class="btn btn-secondary">Learn How</a>
+    <!-- ── HERO ── -->
+    <section class="hero" id="hero">
+        <div class="hero-bg">
+            <div class="hero-grid" aria-hidden="true"></div>
+            <div class="hero-glow-l" aria-hidden="true"></div>
+            <div class="hero-glow-r" aria-hidden="true"></div>
+        </div>
+
+        <div class="container hero-inner">
+
+            <!-- Left: content -->
+            <div class="hero-content">
+                <div class="hero-badge reveal">
+                    <span class="badge-dot"></span>
+                    <span class="mono">Open Source · Free Forever</span>
+                </div>
+
+                <h1 class="hero-title reveal" data-delay="80">
+                    One video.<br>
+                    <em>Five viral clips.</em>
+                </h1>
+
+                <p class="hero-sub reveal" data-delay="180">
+                    ClipGenius finds your best moments, cuts the clips,
+                    adds captions — all on your machine. No cloud.
+                    No subscription. No limits.
+                </p>
+
+                <div class="hero-actions reveal" data-delay="280">
+                    <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="btn-primary">
+                        Get Started Free
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+                    </a>
+                    <a href="#how" class="btn-ghost">See how it works</a>
+                </div>
+
+                <div class="hero-stats reveal" data-delay="380">
+                    <div class="stat">
+                        <span class="stat-num mono" data-count="96">96</span><span class="stat-suf mono">%</span>
+                        <span class="stat-label">Time saved</span>
                     </div>
-                    <div class="hero-stats">
-                        <div class="hero-stat">
-                            <div class="stat-value">96%</div>
-                            <div class="stat-label">Less time editing</div>
+                    <div class="stat-sep" aria-hidden="true"></div>
+                    <div class="stat">
+                        <span class="stat-num mono">∞</span>
+                        <span class="stat-label">Free, forever</span>
+                    </div>
+                    <div class="stat-sep" aria-hidden="true"></div>
+                    <div class="stat">
+                        <span class="stat-num mono">0</span>
+                        <span class="stat-label">Data uploaded</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: App mockup -->
+            <div class="hero-visual reveal" data-delay="120">
+
+                <!-- The app window replica -->
+                <div class="app-window" id="appWindow">
+
+                    <!-- Titlebar -->
+                    <div class="aw-titlebar">
+                        <div class="aw-dots" aria-hidden="true">
+                            <span></span><span></span><span></span>
                         </div>
-                        <div class="hero-stat">
-                            <div class="stat-value">∞</div>
-                            <div class="stat-label">Free, forever</div>
+                        <span class="aw-title mono">ClipGenius — Generation</span>
+                        <div class="aw-live">
+                            <span class="aw-pulse" aria-hidden="true"></span>
+                            <span class="mono">AI Active</span>
+                        </div>
+                    </div>
+
+                    <!-- App body -->
+                    <div class="aw-body">
+
+                        <!-- Sidebar -->
+                        <nav class="aw-sidebar" aria-label="Steps">
+                            <div class="aw-sb-label mono">Steps</div>
+
+                            <div class="aw-nav-item aw-done">
+                                <span class="aw-nav-icon aw-check" aria-hidden="true">✓</span>
+                                <div class="aw-nav-text">
+                                    <span class="aw-nav-title">Source</span>
+                                    <span class="aw-nav-sub">Local file</span>
+                                </div>
+                            </div>
+
+                            <div class="aw-nav-item aw-done">
+                                <span class="aw-nav-icon aw-check" aria-hidden="true">✓</span>
+                                <div class="aw-nav-text">
+                                    <span class="aw-nav-title">Analysis</span>
+                                    <span class="aw-nav-sub">Complete</span>
+                                </div>
+                            </div>
+
+                            <div class="aw-nav-item aw-done">
+                                <span class="aw-nav-icon aw-check" aria-hidden="true">✓</span>
+                                <div class="aw-nav-text">
+                                    <span class="aw-nav-title">Config</span>
+                                    <span class="aw-nav-sub">Podcast</span>
+                                </div>
+                            </div>
+
+                            <div class="aw-nav-item aw-active" aria-current="step">
+                                <span class="aw-nav-icon aw-spin" aria-hidden="true">⟳</span>
+                                <div class="aw-nav-text">
+                                    <span class="aw-nav-title">Generation</span>
+                                    <span class="aw-nav-sub">Processing…</span>
+                                </div>
+                            </div>
+
+                            <div class="aw-nav-item aw-dim">
+                                <span class="aw-nav-icon" aria-hidden="true">○</span>
+                                <div class="aw-nav-text">
+                                    <span class="aw-nav-title">Results</span>
+                                    <span class="aw-nav-sub">Clips</span>
+                                </div>
+                            </div>
+                        </nav>
+
+                        <!-- Main generate view -->
+                        <div class="aw-main">
+                            <div class="aw-generate">
+
+                                <!-- Circular progress ring -->
+                                <div class="aw-ring-wrap">
+                                    <svg class="aw-ring" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+                                        <circle class="aw-ring-track" cx="50" cy="50" r="38" stroke-width="5"/>
+                                        <circle class="aw-ring-fill" id="mockRing" cx="50" cy="50" r="38"
+                                                stroke-width="5"
+                                                stroke-dasharray="238.76"
+                                                stroke-dashoffset="238.76"
+                                                transform="rotate(-90 50 50)"/>
+                                    </svg>
+                                    <div class="aw-ring-center">
+                                        <span class="aw-ring-icon" aria-hidden="true">✂️</span>
+                                        <span class="aw-ring-pct mono" id="mockPct" aria-live="polite">0<span class="aw-ring-sym">%</span></span>
+                                    </div>
+                                </div>
+
+                                <div class="aw-status-text">Creating clips</div>
+                                <div class="aw-substatus mono">Cutting &amp; video effects<span class="aw-blink" aria-hidden="true">_</span></div>
+
+                                <!-- Step pills -->
+                                <div class="aw-pills" role="list">
+                                    <span class="aw-pill aw-pill-done" role="listitem">📥 Download</span>
+                                    <span class="aw-pill aw-pill-done" role="listitem">🎯 Detection</span>
+                                    <span class="aw-pill aw-pill-active" role="listitem">✂️ Creation</span>
+                                    <span class="aw-pill" role="listitem">💬 Subtitles</span>
+                                </div>
+
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="hero-visual">
-                    <div class="clip-cards">
-                        <div class="clip-card clip-1">
-                            <div class="clip-play">▶</div>
-                            <span>60s</span>
-                        </div>
-                        <div class="clip-card clip-2">
-                            <div class="clip-play">▶</div>
-                            <span>45s</span>
-                        </div>
-                        <div class="clip-card clip-3">
-                            <div class="clip-play">▶</div>
-                            <span>52s</span>
-                        </div>
-                        <div class="clip-card clip-4">
-                            <div class="clip-play">▶</div>
-                            <span>38s</span>
-                        </div>
+                <!-- Floating clip cards -->
+                <div class="fc fc-1" aria-hidden="true">
+                    <span class="fc-dot" style="background:var(--teal)"></span>
+                    <div class="fc-body">
+                        <div class="fc-name">Clip 01 · 0:06–0:53</div>
+                        <div class="fc-bar"><div class="fc-fill" style="width:92%;background:var(--teal)"></div></div>
                     </div>
+                    <span class="fc-score" style="color:var(--teal)">92%</span>
+                </div>
+
+                <div class="fc fc-2" aria-hidden="true">
+                    <span class="fc-dot" style="background:var(--accent)"></span>
+                    <div class="fc-body">
+                        <div class="fc-name">Clip 02 · 0:44–1:02</div>
+                        <div class="fc-bar"><div class="fc-fill" style="width:87%;background:var(--accent)"></div></div>
+                    </div>
+                    <span class="fc-score" style="color:var(--accent)">87%</span>
+                </div>
+
+                <div class="fc-done" aria-hidden="true">
+                    <span aria-hidden="true">✅</span>
+                    <div>
+                        <div class="fc-done-title">5 clips ready</div>
+                        <div class="fc-done-sub mono">~/Downloads</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="scroll-hint" aria-hidden="true">
+            <div class="scroll-line"></div>
+            <span class="mono">scroll</span>
+        </div>
+    </section>
+
+    <!-- ── TICKER ── -->
+    <div class="ticker-wrap" aria-hidden="true">
+        <div class="ticker-track">
+            <div class="ticker-inner">
+                <span>🎙️ Podcasts</span><span class="tick-sep">·</span>
+                <span>🎮 Gaming</span><span class="tick-sep">·</span>
+                <span>📹 Vlogs</span><span class="tick-sep">·</span>
+                <span>🎓 Education</span><span class="tick-sep">·</span>
+                <span>🎤 Interviews</span><span class="tick-sep">·</span>
+                <span>🎬 Films</span><span class="tick-sep">·</span>
+                <span>💼 Business</span><span class="tick-sep">·</span>
+                <span>🎙️ Podcasts</span><span class="tick-sep">·</span>
+                <span>🎮 Gaming</span><span class="tick-sep">·</span>
+                <span>📹 Vlogs</span><span class="tick-sep">·</span>
+                <span>🎓 Education</span><span class="tick-sep">·</span>
+                <span>🎤 Interviews</span><span class="tick-sep">·</span>
+                <span>🎬 Films</span><span class="tick-sep">·</span>
+                <span>💼 Business</span><span class="tick-sep">·</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── HOW IT WORKS ── -->
+    <section class="section" id="how">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="label mono">// How it works</div>
+                <h2>Three steps.<br>Zero complexity.</h2>
+            </div>
+
+            <div class="steps-row">
+                <div class="step-item reveal">
+                    <div class="step-wm mono" aria-hidden="true">01</div>
+                    <div class="step-icon-lg" aria-hidden="true">📂</div>
+                    <h3>Drop your video</h3>
+                    <p>Paste a YouTube URL or upload a local file. MP4, MOV, MKV — anything works.</p>
+                </div>
+
+                <div class="step-arrow reveal" data-delay="60" aria-hidden="true">
+                    <svg viewBox="0 0 48 2" fill="none"><line x1="0" y1="1" x2="48" y2="1" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/></svg>
+                    <svg class="step-chevron" viewBox="0 0 10 16" fill="none"><path d="M1 1l8 7-8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </div>
+
+                <div class="step-item reveal" data-delay="120">
+                    <div class="step-wm mono" aria-hidden="true">02</div>
+                    <div class="step-icon-lg" aria-hidden="true">🤖</div>
+                    <h3>AI analyzes everything</h3>
+                    <p>Whisper transcribes, the AI scores each moment for viral potential, detects content type.</p>
+                </div>
+
+                <div class="step-arrow reveal" data-delay="180" aria-hidden="true">
+                    <svg viewBox="0 0 48 2" fill="none"><line x1="0" y1="1" x2="48" y2="1" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/></svg>
+                    <svg class="step-chevron" viewBox="0 0 10 16" fill="none"><path d="M1 1l8 7-8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </div>
+
+                <div class="step-item reveal" data-delay="240">
+                    <div class="step-wm mono" aria-hidden="true">03</div>
+                    <div class="step-icon-lg" aria-hidden="true">✅</div>
+                    <h3>Clips, ready to post</h3>
+                    <p>TikTok-style captions, optimal cuts, perfect aspect ratio. Straight to your Downloads.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Solution Section -->
-    <section id="solution" class="solution-section">
-        <div class="section-wrapper">
-            <h2 class="section-title">The Problem You Face</h2>
-            <p class="section-subtitle">Every content creator knows this pain</p>
+    <!-- ── COMPARE ── -->
+    <section class="compare-section">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="label mono">// The difference</div>
+                <h2>Your time, reclaimed.</h2>
+            </div>
 
-            <div class="problem-solution">
-                <div class="problem-card">
-                    <h3>📹 Without ClipGenius</h3>
-                    <ul>
-                        <li>Watch entire videos frame-by-frame</li>
-                        <li>Manually find "good moments"</li>
-                        <li>Spend hours cutting, trimming, adjusting</li>
-                        <li>Add captions, effects, music separately</li>
-                        <li>Reformat for each platform</li>
-                        <li>Repeat 10+ times per week</li>
+            <div class="compare-grid">
+                <div class="compare-card compare-bad reveal">
+                    <div class="compare-head">
+                        <div class="compare-badge bad" aria-hidden="true">✗</div>
+                        <div>
+                            <h3>Without ClipGenius</h3>
+                            <div class="compare-time bad-time">2–3 hours / video</div>
+                        </div>
+                    </div>
+                    <ul class="compare-list">
+                        <li>Watch the entire video manually</li>
+                        <li>Guess which moments will perform</li>
+                        <li>Cut, trim, adjust frame by frame</li>
+                        <li>Add captions one line at a time</li>
+                        <li>Re-export for each platform format</li>
+                        <li>Repeat this for every video, every week</li>
                     </ul>
-                    <p class="problem-time">2-3 hours per video</p>
                 </div>
 
-                <div class="divider"></div>
+                <div class="compare-vs" aria-hidden="true"><span class="mono">VS</span></div>
 
-                <div class="solution-card">
-                    <h3>✨ With ClipGenius</h3>
-                    <ul>
-                        <li>Drop video, AI finds the moments</li>
-                        <li>Perfect clips in 3 minutes</li>
-                        <li>All effects & captions added</li>
-                        <li>Music selected automatically</li>
+                <div class="compare-card compare-good reveal" data-delay="100">
+                    <div class="compare-head">
+                        <div class="compare-badge good" aria-hidden="true">✓</div>
+                        <div>
+                            <h3>With ClipGenius</h3>
+                            <div class="compare-time good-time">5–10 minutes / video</div>
+                        </div>
+                    </div>
+                    <ul class="compare-list">
+                        <li>Drop the video, walk away</li>
+                        <li>AI finds your highest-scoring moments</li>
+                        <li>Clips auto-cut with smooth transitions</li>
+                        <li>Animated captions added automatically</li>
                         <li>Ready for TikTok, Reels, Shorts</li>
-                        <li>Focus on your content, not editing</li>
+                        <li>Focus on creating, not editing</li>
                     </ul>
-                    <p class="solution-time">5-10 minutes per video</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- For Whom Section -->
-    <section class="for-whom-section">
-        <div class="section-wrapper">
-            <h2 class="section-title">Built for Creators Like You</h2>
-            <p class="section-subtitle">Who benefit most from automation</p>
+    <!-- ── FEATURES ── -->
+    <section class="section" id="features">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="label mono">// Features</div>
+                <h2>Everything you need.<br>Nothing you don't.</h2>
+            </div>
+
+            <div class="bento">
+                <div class="bento-card b-privacy reveal">
+                    <div class="bento-icon" aria-hidden="true">🔒</div>
+                    <h3>100% Private</h3>
+                    <p>Everything runs on your machine. Your videos never leave your hard drive. No accounts, no cloud uploads, no surveillance.</p>
+                    <div class="bento-tag mono">Local AI</div>
+                </div>
+
+                <div class="bento-card b-sm reveal" data-delay="50">
+                    <div class="bento-icon" aria-hidden="true">⚡</div>
+                    <h3>GPU Accelerated</h3>
+                    <p>CUDA-powered processing. Hours of footage analyzed in minutes.</p>
+                </div>
+
+                <div class="bento-card b-sm reveal" data-delay="100">
+                    <div class="bento-icon" aria-hidden="true">🎯</div>
+                    <h3>Viral Score AI</h3>
+                    <p>Multi-signal detection: audio peaks, speech patterns, structural cues.</p>
+                </div>
+
+                <div class="bento-card b-wide reveal" data-delay="150">
+                    <div class="bento-icon" aria-hidden="true">📝</div>
+                    <h3>Smart Captions</h3>
+                    <p>TikTok-style animated subtitles, synced to the millisecond, with emojis.</p>
+                </div>
+
+                <div class="bento-card b-sm reveal" data-delay="200">
+                    <div class="bento-icon" aria-hidden="true">🎬</div>
+                    <h3>Platform Ready</h3>
+                    <p>Perfect 9:16 ratio, right resolution, right length for every platform.</p>
+                </div>
+
+                <div class="bento-card b-free reveal" data-delay="250">
+                    <div class="bento-icon" aria-hidden="true">💰</div>
+                    <h3>Free &amp; Open Source — Always</h3>
+                    <p>No subscription. No usage limits. No "pro plan." Clone it, fork it, deploy it. The code is yours.</p>
+                    <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="bento-link">View on GitHub →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── PERSONAS ── -->
+    <section class="section">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="label mono">// Built for</div>
+                <h2>Creators who refuse<br>to waste time.</h2>
+            </div>
 
             <div class="personas">
-                <div class="persona">
-                    <div class="persona-icon">🎙️</div>
+                <div class="persona reveal">
+                    <div class="persona-emoji" aria-hidden="true">🎙️</div>
                     <h3>Podcasters</h3>
-                    <p>Extract highlights from episodes. Build audience on short-form platforms without extra work.</p>
-                    <div class="persona-benefit">Save 15+ hours/week</div>
+                    <p>Extract the gold from long episodes. Build your Shorts/Reels presence without a video editor.</p>
+                    <div class="persona-metric mono">Save 15+ hrs/week</div>
                 </div>
-
-                <div class="persona">
-                    <div class="persona-icon">🎮</div>
+                <div class="persona reveal" data-delay="80">
+                    <div class="persona-emoji" aria-hidden="true">🎮</div>
                     <h3>Gaming Creators</h3>
-                    <p>Capture epic moments automatically. Go viral while you focus on playing.</p>
-                    <div class="persona-benefit">5 clips per stream</div>
+                    <p>Auto-capture your best clutch moments. Go viral while you focus on actually playing.</p>
+                    <div class="persona-metric mono">5 clips per stream</div>
                 </div>
-
-                <div class="persona">
-                    <div class="persona-icon">📹</div>
+                <div class="persona reveal" data-delay="160">
+                    <div class="persona-emoji" aria-hidden="true">📹</div>
                     <h3>Vloggers</h3>
-                    <p>Find entertaining moments in dailies. Repurpose content across platforms instantly.</p>
-                    <div class="persona-benefit">3x more content</div>
+                    <p>Repurpose your dailies across TikTok, Instagram, YouTube — all from a single file.</p>
+                    <div class="persona-metric mono">3× content output</div>
                 </div>
-
-                <div class="persona">
-                    <div class="persona-icon">🎓</div>
+                <div class="persona reveal" data-delay="240">
+                    <div class="persona-emoji" aria-hidden="true">🎓</div>
                     <h3>Educators</h3>
-                    <p>Break down long tutorials into bite-sized lessons. Reach more learners.</p>
-                    <div class="persona-benefit">Easy distribution</div>
+                    <p>Break long tutorials into bite-sized clips. Reach learners wherever they scroll.</p>
+                    <div class="persona-metric mono">Instant distribution</div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- How It Works -->
-    <section id="benefits" class="how-section">
-        <div class="section-wrapper">
-            <h2 class="section-title">How It Works</h2>
-            <p class="section-subtitle">Three simple steps</p>
-
-            <div class="steps-container">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <h3>Upload</h3>
-                    <p>Paste a YouTube link or upload a local video. That's it.</p>
-                </div>
-                <div class="step-arrow">→</div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <h3>Analyze</h3>
-                    <p>AI finds the best moments, detects faces, optimizes for virality.</p>
-                </div>
-                <div class="step-arrow">→</div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <h3>Download</h3>
-                    <p>Get 3-5 ready-to-post clips with captions, effects, music.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Why It Works Section -->
-    <section class="why-section">
-        <div class="section-wrapper">
-            <h2 class="section-title">Why Creators Choose ClipGenius</h2>
-
-            <div class="features-grid">
-                <div class="feature">
-                    <div class="feature-icon">🔒</div>
-                    <h3>100% Private</h3>
-                    <p>Everything stays on your machine. No cloud, no accounts, no tracking. Your content is yours.</p>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Lightning Fast</h3>
-                    <p>GPU acceleration means clips are ready in minutes, not hours. Works offline.</p>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">🎬</div>
-                    <h3>Platform Ready</h3>
-                    <p>Auto-optimized for TikTok, Instagram Reels, YouTube Shorts. Perfect aspect ratios, captions, effects.</p>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">🤖</div>
-                    <h3>Smart Detection</h3>
-                    <p>AI learns your content style and finds moments that match your brand. Hook optimized for engagement.</p>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">💰</div>
-                    <h3>Free & Open Source</h3>
-                    <p>No subscriptions, no hidden fees. Download and use forever. Fully transparent code.</p>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">📝</div>
-                    <h3>Smart Captions</h3>
-                    <p>TikTok-style animated subtitles with emojis. Synced perfectly, dynamic styling.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Content Types Section -->
-    <section class="content-types-section">
-        <div class="section-wrapper">
-            <h2 class="section-title">Works With Any Content</h2>
-            <p class="section-subtitle">Smart detection adapts to your style</p>
-
-            <div class="content-types">
-                <div class="content-type">
-                    <span class="ct-emoji">🎙️</span>
-                    <span class="ct-name">Podcasts</span>
-                </div>
-                <div class="content-type">
-                    <span class="ct-emoji">🎮</span>
-                    <span class="ct-name">Gaming</span>
-                </div>
-                <div class="content-type">
-                    <span class="ct-emoji">📹</span>
-                    <span class="ct-name">Vlogs</span>
-                </div>
-                <div class="content-type">
-                    <span class="ct-emoji">🎓</span>
-                    <span class="ct-name">Education</span>
-                </div>
-                <div class="content-type">
-                    <span class="ct-emoji">🎬</span>
-                    <span class="ct-name">Films</span>
-                </div>
-                <div class="content-type">
-                    <span class="ct-emoji">🎤</span>
-                    <span class="ct-name">Interviews</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA Section -->
+    <!-- ── CTA ── -->
     <section class="cta-section">
-        <div class="section-wrapper cta-wrapper">
-            <h2>Ready to reclaim your time?</h2>
-            <p>Join creators who save hours every week. No credit card needed.</p>
-            <a href="https://github.com/Zeffut/ClipGenius" target="_blank" class="btn btn-primary btn-large">
-                Get Started Free
-            </a>
+        <div class="cta-bg" aria-hidden="true">
+            <div class="cta-orb-1"></div>
+            <div class="cta-orb-2"></div>
+        </div>
+        <div class="container cta-inner reveal">
+            <div class="label mono">// Ready?</div>
+            <h2 class="cta-title">
+                Stop editing.<br>
+                <span class="cta-em">Start creating.</span>
+            </h2>
+            <p class="cta-sub">Join creators who reclaim hours every single week.<br>Free. No credit card. No account.</p>
+            <div class="cta-actions">
+                <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="btn-primary btn-lg">
+                    Download ClipGenius
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17"/></svg>
+                </a>
+                <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="btn-outline">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Star on GitHub
+                </a>
+            </div>
         </div>
     </section>
 
-    <!-- Footer -->
+    <!-- ── FOOTER ── -->
     <footer class="footer">
-        <div class="footer-wrapper">
-            <div class="footer-content">
-                <p>ClipGenius © 2026 • Open source • Privacy first</p>
-                <div class="footer-links">
-                    <a href="https://github.com/Zeffut/ClipGenius" target="_blank">GitHub</a>
-                    <a href="https://github.com/Zeffut/ClipGenius/issues" target="_blank">Issues</a>
-                    <a href="https://github.com/Zeffut/ClipGenius/discussions" target="_blank">Discussions</a>
-                </div>
+        <div class="container footer-inner">
+            <div class="footer-brand">
+                <a href="#" class="logo">
+                    <span class="logo-mark">CG</span>
+                    ClipGenius
+                </a>
+                <p>Open source. Privacy first. Forever free.</p>
             </div>
+            <div class="footer-links">
+                <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://github.com/Zeffut/ClipGenius/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+                <a href="https://github.com/Zeffut/ClipGenius/discussions" target="_blank" rel="noopener noreferrer">Discussions</a>
+                <a href="https://github.com/Zeffut/ClipGenius/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span class="mono">© 2026 ClipGenius</span>
         </div>
     </footer>
 

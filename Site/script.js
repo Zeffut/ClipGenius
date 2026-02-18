@@ -1,202 +1,155 @@
-// Constantes de configuration
-const NAVBAR_SCROLL_THRESHOLD = 50;
-const COUNTER_ANIMATION_STEPS = 50;
-const STAT_TARGET_PERCENT = 96;
+/* ════════════════════════════════════════
+   ClipGenius Landing — script.js
+   ════════════════════════════════════════ */
 
-// ==================== SMOOTH SCROLL ==================== */
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-        const href = this.getAttribute('href');
-        if (href === '#') return;
-
-        e.preventDefault();
-        const target = document.querySelector(href);
-        if (target) {
-            const offset = 60;
-            const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - offset;
-            window.scrollTo({
-                top: targetPosition,
-                behavior: 'smooth'
-            });
-        }
-    });
-});
-
-// ==================== NAVBAR ENHANCED ==================== */
-let lastScrollTop = 0;
-const navbar = document.querySelector('.navbar');
+/* ── Navbar scroll state ── */
+const navbar = document.getElementById('navbar');
+let ticking = false;
 
 window.addEventListener('scroll', () => {
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-    if (scrollTop > NAVBAR_SCROLL_THRESHOLD) {
-        navbar.classList.add('scrolled');
-        navbar.style.background = 'rgba(255, 255, 255, 0.98)';
-    } else {
-        navbar.classList.remove('scrolled');
-        navbar.style.background = 'rgba(255, 255, 255, 0.95)';
+    if (!ticking) {
+        requestAnimationFrame(() => {
+            navbar.classList.toggle('scrolled', window.scrollY > 20);
+            ticking = false;
+        });
+        ticking = true;
     }
+}, { passive: true });
 
-    lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
-});
-
-// ==================== INTERSECTION OBSERVER FOR ANIMATIONS ==================== */
-const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
+/* ── Scroll reveals (IntersectionObserver) ── */
+const revealOpts = {
+    root: null,
+    rootMargin: '0px 0px -60px 0px',
+    threshold: 0.08
 };
 
-const observer = new IntersectionObserver((entries) => {
+const revealObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'translateY(0)';
-            observer.unobserve(entry.target);
-        }
+        if (!entry.isIntersecting) return;
+        const el = entry.target;
+        const delay = parseInt(el.dataset.delay || '0', 10);
+        setTimeout(() => el.classList.add('visible'), delay);
+        revealObserver.unobserve(el);
     });
-}, observerOptions);
+}, revealOpts);
 
-// Observe all animated elements
-document.querySelectorAll('.feature, .persona, .content-type, .problem-card, .solution-card, .step').forEach(el => {
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(10px)';
-    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-    observer.observe(el);
-});
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-// ==================== COUNTER ANIMATION ==================== */
-function animateCounter(element, target) {
-    let current = 0;
-    const increment = target / COUNTER_ANIMATION_STEPS;
-    const duration = 2000;
+/* ── Animated progress ring in mockup ── */
+const mockRing = document.getElementById('mockRing');
+const mockPct  = document.getElementById('mockPct');
 
-    const counter = setInterval(() => {
-        current += increment;
-        if (current >= target) {
-            element.textContent = target;
-            clearInterval(counter);
-        } else {
-            element.textContent = Math.floor(current);
-        }
-    }, duration / COUNTER_ANIMATION_STEPS);
-}
+const RING_CIRCUMFERENCE = 238.76; // 2 * π * 38
+const TARGET_PCT = 78;
+const RING_DURATION = 2200; // ms
 
-// Observe stats section
-const statsObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-        if (entry.isIntersecting) {
-            const statNumbers = document.querySelectorAll('.stat-value');
-            statNumbers.forEach(stat => {
-                const text = stat.textContent.trim();
-                if (text === '96%') {
-                    animateCounter(stat, STAT_TARGET_PERCENT);
-                    stat.textContent = '96%';
-                }
-            });
-            statsObserver.unobserve(entry.target);
-        }
-    });
-}, { threshold: 0.5 });
+function animateRing() {
+    if (!mockRing || !mockPct) return;
 
-const heroStats = document.querySelector('.hero-stats');
-if (heroStats) {
-    statsObserver.observe(heroStats);
-}
+    let startTime = null;
 
-// ==================== BUTTON HOVER EFFECT ==================== */
-document.querySelectorAll('.btn').forEach(btn => {
-    btn.addEventListener('mouseenter', function() {
-        this.style.transform = 'translateY(-2px)';
-    });
-
-    btn.addEventListener('mouseleave', function() {
-        this.style.transform = 'translateY(0)';
-    });
-});
-
-// ==================== CARD HOVER EFFECTS ==================== */
-document.querySelectorAll('.feature, .persona, .content-type, .step').forEach(card => {
-    card.addEventListener('mouseenter', function() {
-        this.style.cursor = 'pointer';
-    });
-});
-
-// ==================== LOAD ANIMATION ==================== */
-window.addEventListener('load', () => {
-    document.body.style.opacity = '1';
-});
-
-// ==================== ACTIVE NAV LINK ==================== */
-const navLinks = document.querySelectorAll('.nav-link');
-const sections = document.querySelectorAll('section[id]');
-
-window.addEventListener('scroll', () => {
-    let current = '';
-
-    sections.forEach(section => {
-        const sectionTop = section.offsetTop;
-        if (pageYOffset >= sectionTop - 200) {
-            current = section.getAttribute('id');
-        }
-    });
-
-    navLinks.forEach(link => {
-        link.style.color = '';
-        link.style.fontWeight = '';
-        const href = link.getAttribute('href');
-        if (href === '#' + current) {
-            link.style.color = '#3b82f6';
-            link.style.fontWeight = '600';
-        }
-    });
-});
-
-// ==================== ACCESSIBILITY ==================== */
-document.querySelectorAll('a[target="_blank"]').forEach(link => {
-    link.setAttribute('rel', 'noopener noreferrer');
-});
-
-// ==================== PARALLAX ON SCROLL ==================== */
-const heroVisual = document.querySelector('.hero-visual');
-
-if (heroVisual) {
-    window.addEventListener('scroll', () => {
-        const scrollPosition = window.scrollY;
-        const heroSection = document.querySelector('.hero');
-        const heroTop = heroSection.offsetTop;
-
-        if (scrollPosition < heroTop + 500) {
-            heroVisual.style.transform = `translateY(${scrollPosition * 0.5}px)`;
-        }
-    });
-}
-
-// ==================== CLIP CARDS STAGGER ANIMATION ==================== */
-const clipCards = document.querySelectorAll('.clip-card');
-clipCards.forEach((card, index) => {
-    card.style.animation = `fadeIn 0.6s ease forwards ${index * 0.1}s`;
-});
-
-// ==================== PREFERS REDUCED MOTION ==================== */
-if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    document.documentElement.style.scrollBehavior = 'auto';
-    document.querySelectorAll('*').forEach(el => {
-        el.style.animationDuration = '0.01ms';
-        el.style.transitionDuration = '0.01ms';
-    });
-}
-
-// ==================== RESPONSIVE BEHAVIOR ==================== */
-function handleResponsive() {
-    const isMobile = window.innerWidth <= 768;
-
-    // Adjust animations based on device
-    if (isMobile) {
-        document.querySelectorAll('.clip-card').forEach(card => {
-            card.style.animation = 'none';
-        });
+    function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
     }
+
+    function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed  = timestamp - startTime;
+        const progress = Math.min(elapsed / RING_DURATION, 1);
+        const eased    = easeOutCubic(progress);
+
+        const currentPct = Math.round(eased * TARGET_PCT);
+        const offset     = RING_CIRCUMFERENCE * (1 - (eased * TARGET_PCT / 100));
+
+        mockRing.style.strokeDashoffset = offset;
+        mockPct.childNodes[0].textContent = currentPct; // text node before <span>%
+
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        }
+    }
+
+    // Start after a short delay so it plays after page reveal
+    setTimeout(() => requestAnimationFrame(step), 900);
 }
 
-window.addEventListener('resize', handleResponsive);
-handleResponsive();
+// Observe the app window — start animation when it enters the viewport
+const appWindowEl = document.getElementById('appWindow');
+if (appWindowEl) {
+    const ringObserver = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+            animateRing();
+            ringObserver.disconnect();
+        }
+    }, { threshold: 0.3 });
+    ringObserver.observe(appWindowEl);
+} else {
+    animateRing();
+}
+
+/* ── Stat counter animation ── */
+function animateCounter(el, target, duration) {
+    const startTime = performance.now();
+    function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+
+    function frame(now) {
+        const elapsed  = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        el.textContent = Math.round(easeOutQuart(progress) * target);
+        if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+
+const counterEls = document.querySelectorAll('.stat-num[data-count]');
+if (counterEls.length) {
+    const counterObs = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const el     = entry.target;
+            const target = parseInt(el.dataset.count, 10);
+            animateCounter(el, target, 1800);
+            counterObs.unobserve(el);
+        });
+    }, { threshold: 0.5 });
+
+    counterEls.forEach(el => counterObs.observe(el));
+}
+
+/* ── Smooth-scroll for anchor links ── */
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', e => {
+        const href = anchor.getAttribute('href');
+        if (href === '#') return;
+        const target = document.querySelector(href);
+        if (!target) return;
+        e.preventDefault();
+        const offset = 72; // nav height + buffer
+        const top    = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+    });
+});
+
+/* ── Hide scroll hint on first scroll ── */
+const scrollHint = document.querySelector('.scroll-hint');
+if (scrollHint) {
+    const hideHint = () => {
+        scrollHint.style.opacity = '0';
+        scrollHint.style.transition = 'opacity .5s';
+        window.removeEventListener('scroll', hideHint);
+    };
+    window.addEventListener('scroll', hideHint, { passive: true, once: true });
+}
+
+/* ── Seamless ticker (clone for loop) ── */
+const tickerInner = document.querySelector('.ticker-inner');
+if (tickerInner) {
+    const clone = tickerInner.cloneNode(true);
+    clone.setAttribute('aria-hidden', 'true');
+    tickerInner.parentNode.appendChild(clone);
+}
+
+/* ── Accessibility: external links ── */
+document.querySelectorAll('a[target="_blank"]').forEach(link => {
+    if (!link.hasAttribute('rel')) link.setAttribute('rel', 'noopener noreferrer');
+});
