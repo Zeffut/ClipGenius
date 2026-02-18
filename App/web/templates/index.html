@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" id="htmlRoot">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClipGenius</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -31,6 +31,7 @@
             --accent-glow: rgba(0, 122, 204, 0.3);
             --scrollbar-thumb: #555;
             --scrollbar-thumb-hover: #777;
+            --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
         }
 
         [data-theme="light"] {
@@ -51,6 +52,7 @@
             --accent-glow: rgba(0, 95, 184, 0.2);
             --scrollbar-thumb: #c1c1c1;
             --scrollbar-thumb-hover: #a1a1a1;
+            --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
         }
 
         /* Theme toggle icon switching */
@@ -104,7 +106,6 @@
             font-size: 13px;
             font-weight: 600;
             letter-spacing: -0.2px;
-        }
         }
 
         .titlebar-center {
@@ -166,12 +167,14 @@
         }
 
         .sidebar-section-title {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             margin-bottom: 12px;
+            font-family: var(--mono);
+            padding-left: 4px;
         }
 
         .nav-item {
@@ -195,9 +198,15 @@
         }
 
         .nav-item.active {
+            background: rgba(0, 122, 204, 0.15) !important;
+            color: var(--accent) !important;
+            box-shadow: inset 3px 0 0 var(--accent);
+            border-radius: 0 6px 6px 0;
+        }
+
+        .nav-item.active .step-badge {
             background: var(--accent) !important;
             color: white !important;
-            box-shadow: 0 2px 8px var(--accent-glow);
         }
 
         .nav-item.disabled {
@@ -246,16 +255,12 @@
             font-size: 10px;
             font-weight: 600;
             flex-shrink: 0;
+            font-family: var(--mono);
         }
 
         .nav-item .step-badge {
             background: var(--border);
             color: var(--text-muted);
-        }
-
-        .nav-item.active .step-badge {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
         }
 
         .nav-item.completed .step-badge {
@@ -264,7 +269,11 @@
         }
 
         .nav-item.completed:not(.active) {
-            /* Style propre sans bordure */
+            color: var(--text-muted);
+        }
+
+        .nav-item.completed:not(.active):hover {
+            color: var(--text);
         }
 
         .nav-item.processing .step-badge {
@@ -274,14 +283,23 @@
         }
 
         .nav-item.processing.active {
-            background: var(--accent);
-            color: white;
+            background: rgba(0, 122, 204, 0.15);
+            color: var(--accent);
         }
 
         .sidebar-footer {
             margin-top: auto;
-            padding: 16px;
+            padding: 12px 16px;
             border-top: 1px solid var(--border);
+        }
+
+        .sidebar-version {
+            font-size: 10px;
+            font-family: var(--mono);
+            color: var(--text-muted);
+            opacity: 0.5;
+            text-align: center;
+            letter-spacing: 0.5px;
         }
 
         .quick-action {
@@ -336,9 +354,9 @@
         }
 
         .content-wrapper {
-            max-width: 900px;
+            max-width: 860px;
             margin: 0 auto;
-            padding: 24px 40px;
+            padding: 28px 40px 40px;
         }
 
         /* Step views */
@@ -364,14 +382,17 @@
 
         /* Page header */
         .page-header {
-            margin-bottom: 24px;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
         }
 
         .page-title {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 600;
             margin-bottom: 6px;
             color: var(--text);
+            letter-spacing: -0.3px;
         }
 
         .page-description {
@@ -383,16 +404,32 @@
         .form-section {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin-bottom: 16px;
         }
 
         .form-section-title {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
-            margin-bottom: 12px;
-            color: var(--text);
+            margin-bottom: 16px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-family: var(--mono);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-section-title::before {
+            content: '';
+            display: inline-block;
+            width: 3px;
+            height: 14px;
+            background: var(--accent);
+            border-radius: 2px;
+            flex-shrink: 0;
         }
 
         .form-group {
@@ -483,6 +520,7 @@
             font-weight: 600;
             text-align: center;
             font-variant-numeric: tabular-nums;
+            font-family: var(--mono);
             box-shadow: 0 2px 8px var(--accent-glow);
             transition: all 0.2s ease;
         }
@@ -658,6 +696,7 @@
             font-variant-numeric: tabular-nums;
             text-align: center;
             font-weight: 500;
+            font-family: var(--mono);
         }
 
         input[type="number"]::-webkit-inner-spin-button,
@@ -704,10 +743,10 @@
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 9px 18px;
             background: var(--accent);
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             color: white;
             font-size: 13px;
             font-weight: 500;
@@ -718,6 +757,7 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            letter-spacing: 0.1px;
         }
 
         .btn:hover:not(:disabled) {
@@ -837,31 +877,35 @@
         /* === NEW ENGAGING PROGRESS DESIGN === */
         .progress-hero {
             text-align: center;
-            padding: 60px 40px;
-            background: linear-gradient(135deg, var(--accent-glow) 0%, rgba(0, 164, 239, 0.05) 100%);
-            border-radius: 16px;
+            padding: 56px 40px 48px;
+            background: var(--surface);
+            border-radius: 12px;
             border: 1px solid var(--border);
             position: relative;
             overflow: hidden;
         }
 
-        /* Animated background particles */
+        /* Top accent line */
         .progress-hero::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            bottom: 0;
-            background-image: 
-                radial-gradient(circle at 20% 80%, var(--accent-glow) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(0, 164, 239, 0.1) 0%, transparent 50%);
-            animation: bgPulse 4s ease-in-out infinite alternate;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), #00a4ef, var(--success));
+            border-radius: 12px 12px 0 0;
         }
 
-        @keyframes bgPulse {
-            0% { opacity: 0.5; }
-            100% { opacity: 1; }
+        /* Subtle radial bg glow */
+        .progress-hero::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                radial-gradient(ellipse at 50% 0%, var(--accent-glow) 0%, transparent 60%);
+            opacity: 0.4;
+            pointer-events: none;
         }
 
         /* Circular progress indicator */
@@ -924,6 +968,7 @@
             color: var(--text);
             line-height: 1;
             font-variant-numeric: tabular-nums;
+            font-family: var(--mono);
         }
 
         .progress-percentage-suffix {
@@ -1067,8 +1112,12 @@
         }
 
         .results-title {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-family: var(--mono);
         }
 
         .results-count {
@@ -1097,21 +1146,16 @@
         .clip-card {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 8px;
             overflow: hidden;
             transition: all 0.2s;
-            position: relative; /* Explicit positioning context */
-        }
-        
-        /* Ensure no pseudo-elements create overlays */
-        .clip-card::before,
-        .clip-card::after {
-            content: none !important;
+            position: relative;
         }
 
         .clip-card:hover {
             border-color: var(--accent);
             transform: translateY(-2px);
+            box-shadow: 0 4px 16px var(--shadow-color);
         }
 
         .clip-card-body {
@@ -1122,8 +1166,15 @@
         }
 
         .clip-icon {
-            font-size: 28px;
-            margin-bottom: 2px;
+            font-size: 22px;
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 122, 204, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
 
         .clip-name {
@@ -1149,16 +1200,31 @@
             align-items: center;
             gap: 12px;
             transition: all 0.2s;
+            border-left: 3px solid var(--accent);
         }
 
+        .results-stat-card:nth-child(2) { border-left-color: var(--success); }
+        .results-stat-card:nth-child(2) .results-stat-icon { background: rgba(78, 201, 176, 0.1); }
+        .results-stat-card:nth-child(3) { border-left-color: var(--warning); }
+        .results-stat-card:nth-child(3) .results-stat-icon { background: rgba(206, 145, 120, 0.1); }
+        .results-stat-card:nth-child(4) { border-left-color: var(--text-muted); }
+        .results-stat-card:nth-child(4) .results-stat-icon { background: rgba(133, 133, 133, 0.1); }
+
         .results-stat-card:hover {
-            border-color: var(--accent);
             transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow-color);
         }
 
         .results-stat-icon {
-            font-size: 28px;
+            font-size: 22px;
             flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 122, 204, 0.1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .results-stat-content {
@@ -1171,6 +1237,7 @@
             color: var(--text);
             margin-bottom: 2px;
             font-variant-numeric: tabular-nums;
+            font-family: var(--mono);
         }
 
         .results-stat-label {
@@ -1197,6 +1264,7 @@
             border-radius: 10px;
             font-size: 10px;
             color: var(--text-muted);
+            font-family: var(--mono);
         }
 
         .clip-badge.score {
@@ -1287,11 +1355,11 @@
         /* Source Tabs */
         .source-tabs {
             display: flex;
-            gap: 8px;
+            gap: 2px;
             margin-bottom: 24px;
-            background: var(--surface);
-            padding: 6px;
-            border-radius: 12px;
+            background: var(--bg-secondary);
+            padding: 4px;
+            border-radius: 8px;
             border: 1px solid var(--border);
         }
 
@@ -1301,25 +1369,26 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            padding: 12px 20px;
+            padding: 9px 20px;
             border: none;
             background: transparent;
-            color: var(--text-dim);
-            font-size: 14px;
+            color: var(--text-muted);
+            font-size: 13px;
             font-weight: 500;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }
 
         .source-tab:hover {
             color: var(--text);
-            background: var(--surface-hover);
+            background: var(--surface);
         }
 
         .source-tab.active {
-            background: var(--accent);
-            color: white;
+            background: var(--surface);
+            color: var(--accent);
+            box-shadow: 0 1px 4px var(--shadow-color);
         }
 
         .source-tab svg {
@@ -1339,22 +1408,23 @@
         /* File Drop Zone */
         .file-drop-zone {
             border: 2px dashed var(--border);
-            border-radius: 16px;
-            padding: 48px 24px;
+            border-radius: 12px;
+            padding: 52px 24px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.25s ease;
             background: var(--surface);
+            position: relative;
         }
 
         .file-drop-zone:hover {
             border-color: var(--accent);
-            background: var(--accent-glow);
+            background: rgba(0, 122, 204, 0.05);
         }
 
         .file-drop-zone.dragover {
             border-color: var(--accent);
-            background: var(--accent-glow);
+            background: rgba(0, 122, 204, 0.08);
             transform: scale(1.01);
         }
 
@@ -1362,37 +1432,55 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+        }
+
+        .file-drop-icon-wrap {
+            width: 64px;
+            height: 64px;
+            background: rgba(0, 122, 204, 0.1);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 4px;
+            transition: all 0.25s ease;
         }
 
         .file-drop-content svg {
-            color: var(--text-dim);
-            opacity: 0.6;
+            color: var(--accent);
+            opacity: 0.8;
+        }
+
+        .file-drop-zone:hover .file-drop-icon-wrap {
+            background: rgba(0, 122, 204, 0.18);
+            transform: scale(1.05);
         }
 
         .file-drop-zone:hover .file-drop-content svg {
-            color: var(--accent);
             opacity: 1;
         }
 
         .file-drop-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             color: var(--text);
             margin: 0;
         }
 
         .file-drop-subtitle {
-            font-size: 14px;
-            color: var(--text-dim);
+            font-size: 13px;
+            color: var(--text-muted);
             margin: 0;
         }
 
         .file-drop-formats {
-            font-size: 12px;
-            color: var(--text-dim);
-            opacity: 0.7;
-            margin: 8px 0 0 0;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.6;
+            margin: 4px 0 0 0;
+            font-family: var(--mono);
+            letter-spacing: 0.5px;
         }
 
         /* File Preview Card */
@@ -1433,7 +1521,7 @@
 
         .file-preview-size {
             font-size: 13px;
-            color: var(--text-dim);
+            color: var(--text-muted);
             margin: 0;
         }
 
@@ -1446,7 +1534,7 @@
             background: transparent;
             border: 1px solid var(--border);
             border-radius: 8px;
-            color: var(--text-dim);
+            color: var(--text-muted);
             cursor: pointer;
             transition: all 0.2s ease;
         }
@@ -1479,12 +1567,13 @@
         .preset-card:hover {
             border-color: var(--accent);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+            box-shadow: 0 4px 12px var(--accent-glow);
         }
-        
+
         .preset-card.selected {
             border-color: var(--accent);
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            background: rgba(0, 122, 204, 0.08);
+            box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 16px var(--accent-glow);
         }
         
         .preset-card.selected::before {
@@ -1505,27 +1594,29 @@
         }
         
         .preset-icon {
-            font-size: 48px;
-            margin-bottom: 12px;
+            font-size: 36px;
+            margin-bottom: 10px;
+            line-height: 1;
+            display: block;
         }
-        
+
         .preset-name {
-            font-size: 18px;
+            font-size: 14px;
             font-weight: 600;
             color: var(--text);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
-        
+
         .preset-desc {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--text-muted);
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             line-height: 1.4;
         }
 
         /* YouTube Preview Card */
         .youtube-preview-card {
-            background: linear-gradient(135deg, var(--surface) 0%, rgba(102, 126, 234, 0.03) 100%);
+            background: linear-gradient(135deg, var(--surface) 0%, rgba(0, 122, 204, 0.04) 100%);
             border: 2px solid var(--border);
             border-radius: 16px;
             padding: 24px;
@@ -1757,7 +1848,7 @@
         </div>
         <div class="titlebar-center" id="titlebarStatus"></div>
         <div class="titlebar-actions">
-            <button class="titlebar-btn" id="themeToggle" title="Changer de thème" onclick="toggleTheme()">
+            <button class="titlebar-btn" id="themeToggle" title="Changer de thème" data-i18n-title="titlebar.theme" onclick="toggleTheme()">
                 <!-- Soleil (affiché en mode sombre) -->
                 <svg id="themeIconLight" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="5"></circle>
@@ -1786,7 +1877,7 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Étapes</div>
+                <div class="sidebar-section-title" data-i18n="nav.steps">Étapes</div>
                 
                 <!-- Step 1: Source -->
                 <a href="#" class="nav-item active" data-step="source" onclick="navigateToStep('source'); return false;">
@@ -1796,7 +1887,7 @@
                     <div class="nav-item-content">
                         <div class="nav-item-label">
                             <span class="nav-item-title">Source</span>
-                            <span class="nav-item-subtitle" id="sourceNavSubtitle">Fichier local</span>
+                            <span class="nav-item-subtitle" id="sourceNavSubtitle" data-i18n="nav.source.sub.local">Fichier local</span>
                         </div>
                         <span class="step-badge">1</span>
                     </div>
@@ -1809,8 +1900,8 @@
                     </svg>
                     <div class="nav-item-content">
                         <div class="nav-item-label">
-                            <span class="nav-item-title">Analyse</span>
-                            <span class="nav-item-subtitle" id="analyzeNavSubtitle">En attente</span>
+                            <span class="nav-item-title" data-i18n="nav.analyze">Analyse</span>
+                            <span class="nav-item-subtitle" id="analyzeNavSubtitle" data-i18n="nav.analyze.sub">En attente</span>
                         </div>
                         <span class="step-badge">2</span>
                     </div>
@@ -1823,8 +1914,8 @@
                     </svg>
                     <div class="nav-item-content">
                         <div class="nav-item-label">
-                            <span class="nav-item-title">Configuration</span>
-                            <span class="nav-item-subtitle" id="configNavSubtitle">Paramètres</span>
+                            <span class="nav-item-title" data-i18n="nav.config">Configuration</span>
+                            <span class="nav-item-subtitle" id="configNavSubtitle" data-i18n="nav.config.sub">Paramètres</span>
                         </div>
                         <span class="step-badge">3</span>
                     </div>
@@ -1837,8 +1928,8 @@
                     </svg>
                     <div class="nav-item-content">
                         <div class="nav-item-label">
-                            <span class="nav-item-title">Génération</span>
-                            <span class="nav-item-subtitle">Traitement</span>
+                            <span class="nav-item-title" data-i18n="nav.generate">Génération</span>
+                            <span class="nav-item-subtitle" data-i18n="nav.generate.sub">Traitement</span>
                         </div>
                         <span class="step-badge">4</span>
                     </div>
@@ -1851,8 +1942,8 @@
                     </svg>
                     <div class="nav-item-content">
                         <div class="nav-item-label">
-                            <span class="nav-item-title">Résultats</span>
-                            <span class="nav-item-subtitle">Clips générés</span>
+                            <span class="nav-item-title" data-i18n="nav.results">Résultats</span>
+                            <span class="nav-item-subtitle" data-i18n="nav.results.sub">Clips générés</span>
                         </div>
                         <span class="step-badge">5</span>
                     </div>
@@ -1860,7 +1951,7 @@
             </div>
 
             <div class="sidebar-footer">
-                <!-- Bouton "Ouvrir les clips" supprimé - clips dans ~/Téléchargements -->
+                <div class="sidebar-version">ClipGenius v2.0</div>
             </div>
         </div>
 
@@ -1871,8 +1962,8 @@
                 <!-- STEP 1: SOURCE -->
                 <div class="step-view active" id="view-source">
                     <div class="page-header">
-                        <h1 class="page-title">Selectionner la video source</h1>
-                        <p class="page-description">Importez un fichier video ou collez un lien YouTube</p>
+                        <h1 class="page-title" data-i18n="source.title">Selectionner la video source</h1>
+                        <p class="page-description" data-i18n="source.desc">Importez un fichier video ou collez un lien YouTube</p>
                     </div>
 
                     <!-- Source Type Tabs -->
@@ -1881,13 +1972,13 @@
                             <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                             </svg>
-                            Fichier local
+                            <span data-i18n="source.tab.local">Fichier local</span>
                         </button>
                         <button type="button" class="source-tab" data-source="youtube" onclick="switchSourceTab('youtube')">
                             <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
                             </svg>
-                            Lien YouTube
+                            <span data-i18n="source.tab.youtube">Lien YouTube</span>
                         </button>
                     </div>
 
@@ -1895,12 +1986,14 @@
                     <div class="source-panel active" id="panel-local">
                         <div class="file-drop-zone" id="fileDropZone" onclick="selectLocalFile()">
                             <div class="file-drop-content">
-                                <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                                </svg>
-                                <p class="file-drop-title">Cliquez pour sélectionner une vidéo</p>
-                                <p class="file-drop-subtitle">ou glissez-déposez votre fichier ici</p>
-                                <p class="file-drop-formats">MP4, MOV, AVI, MKV, WebM</p>
+                                <div class="file-drop-icon-wrap">
+                                    <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                                    </svg>
+                                </div>
+                                <p class="file-drop-title" data-i18n="source.drop.title">Cliquez pour sélectionner une vidéo</p>
+                                <p class="file-drop-subtitle" data-i18n="source.drop.subtitle">ou glissez-déposez votre fichier ici</p>
+                                <p class="file-drop-formats" data-i18n="source.drop.formats">MP4 · MOV · AVI · MKV · WebM</p>
                             </div>
                         </div>
                         
@@ -1927,18 +2020,18 @@
                     <div class="source-panel" id="panel-youtube">
                         <div class="form-group">
                             <label class="form-label">
-                                URL de la video YouTube
+                                <span data-i18n="source.youtube.label">URL de la video YouTube</span>
                                 <span class="url-validation-status" id="urlValidationStatus"></span>
                             </label>
                             <div style="position: relative;">
-                                <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=..." oninput="validateYoutubeUrl(this.value)">
+                                <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=..." data-i18n-placeholder="source.youtube.placeholder" oninput="validateYoutubeUrl(this.value)">
                                 <div class="url-validation-icon" id="urlValidationIcon"></div>
                             </div>
                             <div class="form-hint" style="margin-top: 8px;">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                Formats acceptes : youtube.com/watch?v=... ou youtu.be/...
+                                <span data-i18n="source.youtube.hint">Formats acceptes : youtube.com/watch?v=... ou youtu.be/...</span>
                             </div>
                         </div>
 
@@ -1950,7 +2043,7 @@
                                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                                     </svg>
-                                    Chargement de l'aperçu vidéo...
+                                    <span data-i18n="source.youtube.loading">Chargement de l'aperçu vidéo...</span>
                                 </span>
                             </div>
                             <div class="youtube-preview-error" id="youtubePreviewError" style="display: none;">
@@ -1959,8 +2052,8 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                                     </svg>
                                 </div>
-                                <h3 class="youtube-preview-error-title" id="youtubeErrorTitle">Vidéo indisponible</h3>
-                                <p class="youtube-preview-error-message" id="youtubeErrorMessage">Cette vidéo est indisponible, privée ou supprimée.</p>
+                                <h3 class="youtube-preview-error-title" id="youtubeErrorTitle" data-i18n="source.youtube.unavailable">Vidéo indisponible</h3>
+                                <p class="youtube-preview-error-message" id="youtubeErrorMessage" data-i18n="source.youtube.unavailable.msg">Cette vidéo est indisponible, privée ou supprimée.</p>
                             </div>
                             <div class="youtube-preview-content" id="youtubePreviewContent" style="display: none;">
                                 <div class="youtube-preview-thumbnail-container">
@@ -1968,11 +2061,11 @@
                                 </div>
                                 <div class="youtube-preview-info">
                                     <div class="youtube-preview-header">
-                                        <h3 class="youtube-preview-title" id="youtubeTitle">Titre de la vidéo</h3>
+                                        <h3 class="youtube-preview-title" id="youtubeTitle" data-i18n="source.youtube.default.title">Titre de la vidéo</h3>
                                     </div>
                                     <div class="youtube-preview-meta">
                                         <div class="youtube-preview-channel">
-                                            <span id="youtubeChannel">Nom de la chaîne</span>
+                                            <span id="youtubeChannel" data-i18n="source.youtube.default.channel">Nom de la chaîne</span>
                                         </div>
                                     </div>
                                     <div class="youtube-preview-stats">
@@ -1980,13 +2073,13 @@
                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                             </svg>
-                                            <span id="youtubeVideoDuration">Durée: --:--</span>
+                                            <span id="youtubeVideoDuration"><span data-i18n="source.youtube.duration">Durée</span>: --:--</span>
                                         </div>
                                         <div class="youtube-preview-stat">
                                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"/>
                                             </svg>
-                                            <span>Format: 16:9</span>
+                                            <span data-i18n="source.youtube.format">Format: 16:9</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1997,7 +2090,7 @@
                     <!-- Next button -->
                     <div style="margin-top: 24px; display: flex; justify-content: flex-end;">
                         <button type="button" class="btn" id="sourceNextBtn" onclick="nextStep()" disabled>
-                            Suivant
+                            <span data-i18n="source.btn.next">Suivant</span>
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                             </svg>
@@ -2008,8 +2101,8 @@
                 <!-- STEP 2: ANALYSE -->
                 <div class="step-view" id="view-analyze">
                     <div class="page-header">
-                        <h1 class="page-title">🔍 Analyse en cours</h1>
-                        <p class="page-description">Détection automatique du type de contenu</p>
+                        <h1 class="page-title" data-i18n="analyze.title">🔍 Analyse en cours</h1>
+                        <p class="page-description" data-i18n="analyze.desc">Détection automatique du type de contenu</p>
                     </div>
 
                     <!-- Progress section -->
@@ -2036,22 +2129,22 @@
                             </div>
                             
                             <!-- Status Messages -->
-                            <div class="progress-status" id="analysisProgressStatus">Analyse de votre vidéo...</div>
-                            <div class="progress-substatus" id="analysisProgressSubstatus">Détection du type de contenu en cours</div>
+                            <div class="progress-status" id="analysisProgressStatus" data-i18n="analyze.status">Analyse de votre vidéo...</div>
+                            <div class="progress-substatus" id="analysisProgressSubstatus" data-i18n="analyze.substatus">Détection du type de contenu en cours</div>
                             
                             <!-- Step Indicators -->
                             <div class="progress-steps" id="analysisProgressSteps">
                                 <div class="progress-step active" data-step="download" id="analysisStepDownload">
                                     <span class="progress-step-icon">📥</span>
-                                    <span id="analysisDownloadStepName">Chargement</span>
+                                    <span id="analysisDownloadStepName" data-i18n="analyze.step.download">Chargement</span>
                                 </div>
                                 <div class="progress-step" data-step="transcribe" id="analysisStepTranscribe">
                                     <span class="progress-step-icon">🎤</span>
-                                    <span>Transcription</span>
+                                    <span data-i18n="analyze.step.transcribe">Transcription</span>
                                 </div>
                                 <div class="progress-step" data-step="detect" id="analysisStepDetect">
                                     <span class="progress-step-icon">🎯</span>
-                                    <span>Détection</span>
+                                    <span data-i18n="analyze.step.detect">Détection</span>
                                 </div>
                             </div>
                         </div>
@@ -2063,10 +2156,10 @@
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                             </svg>
-                            Retour
+                            <span data-i18n="analyze.btn.back">Retour</span>
                         </button>
                         <button type="button" class="btn" id="analyzeNextBtn" onclick="nextStep()">
-                            Suivant
+                            <span data-i18n="analyze.btn.next">Suivant</span>
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                             </svg>
@@ -2077,8 +2170,8 @@
                 <!-- STEP 3: CONFIGURATION -->
                 <div class="step-view" id="view-config">
                     <div class="page-header">
-                        <h1 class="page-title">⚙️ Configurer les paramètres</h1>
-                        <p class="page-description">Personnalisez la génération de vos clips selon vos besoins</p>
+                        <h1 class="page-title" data-i18n="config.title">⚙️ Configurer les paramètres</h1>
+                        <p class="page-description" data-i18n="config.desc">Personnalisez la génération de vos clips selon vos besoins</p>
                     </div>
 
                     <!-- Platform Presets -->
@@ -2087,46 +2180,46 @@
                             <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: inline; vertical-align: middle; margin-right: 8px;">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
                             </svg>
-                            Type de contenu
+                            <span data-i18n="config.content.type">Type de contenu</span>
                         </div>
                         <div class="preset-grid">
                             <!-- Podcast Preset -->
                             <div class="preset-card selected" data-preset="podcast" onclick="selectPreset('podcast')">
                                 <div class="preset-icon">🎙️</div>
-                                <div class="preset-name">Podcast</div>
-                                <div class="preset-desc">Interviews, discussions et talk-shows</div>
+                                <div class="preset-name" data-i18n="config.preset.podcast">Podcast</div>
+                                <div class="preset-desc" data-i18n="config.preset.podcast.desc">Interviews, discussions et talk-shows</div>
                             </div>
 
                             <!-- Gaming Preset -->
                             <div class="preset-card" data-preset="gaming" onclick="selectPreset('gaming')">
                                 <div class="preset-icon">🎮</div>
-                                <div class="preset-name">Gaming</div>
-                                <div class="preset-desc">Clips de jeux et meilleurs moments</div>
+                                <div class="preset-name" data-i18n="config.preset.gaming">Gaming</div>
+                                <div class="preset-desc" data-i18n="config.preset.gaming.desc">Clips de jeux et meilleurs moments</div>
                             </div>
 
                             <!-- Vlog Preset -->
                             <div class="preset-card" data-preset="vlog" onclick="selectPreset('vlog')">
                                 <div class="preset-icon">📹</div>
-                                <div class="preset-name">Vlog</div>
-                                <div class="preset-desc">Lifestyle, voyages et quotidien</div>
+                                <div class="preset-name" data-i18n="config.preset.vlog">Vlog</div>
+                                <div class="preset-desc" data-i18n="config.preset.vlog.desc">Lifestyle, voyages et quotidien</div>
                             </div>
 
                             <!-- Tutorial Preset -->
                             <div class="preset-card" data-preset="tutorial" onclick="selectPreset('tutorial')">
                                 <div class="preset-icon">🎓</div>
-                                <div class="preset-name">Tutoriel</div>
-                                <div class="preset-desc">Guides, formations et how-to</div>
+                                <div class="preset-name" data-i18n="config.preset.tutorial">Tutoriel</div>
+                                <div class="preset-desc" data-i18n="config.preset.tutorial.desc">Guides, formations et how-to</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Advanced Parameters -->
                     <div class="form-section">
-                        <div class="form-section-title">Paramètres</div>
+                        <div class="form-section-title" data-i18n="config.params">Paramètres</div>
                         
                         <div class="options-grid">
                             <div class="form-group">
-                                <label class="form-label">⏱️ Durée min (secondes)</label>
+                                <label class="form-label" data-i18n="config.min.duration">⏱️ Durée min (secondes)</label>
                                 <div class="input-with-icon">
                                     <span class="input-icon">📏</span>
                                     <input type="number" id="minDuration" value="60" min="15" max="180">
@@ -2135,7 +2228,7 @@
                             </div>
                             
                             <div class="form-group">
-                                <label class="form-label">⏱️ Durée max (secondes)</label>
+                                <label class="form-label" data-i18n="config.max.duration">⏱️ Durée max (secondes)</label>
                                 <div class="input-with-icon">
                                     <span class="input-icon">📏</span>
                                     <input type="number" id="maxDuration" value="90" min="30" max="180">
@@ -2144,10 +2237,10 @@
                             </div>
                             
                             <div class="form-group">
-                                <label class="form-label">🎞️ Nombre max de clips</label>
+                                <label class="form-label" data-i18n="config.max.clips">🎞️ Nombre max de clips</label>
                                 <div class="input-with-icon">
                                     <span class="input-icon">🔢</span>
-                                    <input type="number" id="maxClips" placeholder="Auto" min="1" max="20">
+                                    <input type="number" id="maxClips" placeholder="Auto" data-i18n-placeholder="config.max.clips.placeholder" min="1" max="20">
                                     <span class="input-suffix" style="opacity: 0.5;">clips</span>
                                 </div>
                             </div>
@@ -2160,14 +2253,14 @@
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                             </svg>
-                            Précédent
+                            <span data-i18n="config.btn.previous">Précédent</span>
                         </button>
                         <button type="button" class="btn" id="startGenerationBtn" onclick="startGeneration()">
                             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            Lancer la génération
+                            <span data-i18n="config.btn.generate">Lancer la génération</span>
                         </button>
                     </div>
                 </div>
@@ -2175,8 +2268,8 @@
                 <!-- STEP 3: GENERATION -->
                 <div class="step-view" id="view-generate">
                     <div class="page-header">
-                        <h1 class="page-title">🎬 Génération en cours</h1>
-                        <p class="page-description">Suivez la progression du traitement de votre vidéo</p>
+                        <h1 class="page-title" data-i18n="generate.title">🎬 Génération en cours</h1>
+                        <p class="page-description" data-i18n="generate.desc">Suivez la progression du traitement de votre vidéo</p>
                     </div>
 
                     <!-- Progress section -->
@@ -2207,30 +2300,30 @@
                             </div>
                             
                             <!-- Status Messages -->
-                            <div class="progress-status" id="progressStatus">Préparation de la magie...</div>
-                            <div class="progress-substatus" id="progressSubstatus">Votre vidéo est entre de bonnes mains</div>
+                            <div class="progress-status" id="progressStatus" data-i18n="generate.status">Préparation de la magie...</div>
+                            <div class="progress-substatus" id="progressSubstatus" data-i18n="generate.substatus">Votre vidéo est entre de bonnes mains</div>
                             
                             <!-- Step Indicators -->
                             <div class="progress-steps" id="progressSteps">
                                 <!-- Téléchargement caché en génération (vidéo déjà analysée) -->
                                 <div class="progress-step" data-step="download" id="stepDownload" style="display: none;">
                                     <span class="progress-step-icon">📥</span>
-                                    <span id="downloadStepName">Téléchargement</span>
+                                    <span id="downloadStepName" data-i18n="generate.step.download">Téléchargement</span>
                                 </div>
                                 <!-- Étape 1: Détection des moments viraux -->
                                 <div class="progress-step" data-step="detect">
                                     <span class="progress-step-icon">🎯</span>
-                                    <span>Détection</span>
+                                    <span data-i18n="generate.step.detect">Détection</span>
                                 </div>
                                 <!-- Étape 2: Création des clips vidéo -->
                                 <div class="progress-step" data-step="generate">
                                     <span class="progress-step-icon">✂️</span>
-                                    <span>Création</span>
+                                    <span data-i18n="generate.step.create">Création</span>
                                 </div>
                                 <!-- Étape 3: Ajout des sous-titres -->
                                 <div class="progress-step" data-step="subtitles">
                                     <span class="progress-step-icon">💬</span>
-                                    <span>Sous-titres</span>
+                                    <span data-i18n="generate.step.subtitles">Sous-titres</span>
                                 </div>
                             </div>
                         </div>
@@ -2240,8 +2333,8 @@
                 <!-- STEP 4: RESULTS -->
                 <div class="step-view" id="view-results">
                     <div class="page-header">
-                        <h1 class="page-title">✅ Clips générés avec succès</h1>
-                        <p class="page-description">Vos clips sont automatiquement sauvegardés dans <strong>~/Téléchargements</strong></p>
+                        <h1 class="page-title" data-i18n="results.title">✅ Clips générés avec succès</h1>
+                        <p class="page-description" data-i18n-html="results.desc">Vos clips sont automatiquement sauvegardés dans <strong>~/Téléchargements</strong></p>
                     </div>
 
                     <!-- Statistics Summary -->
@@ -2250,28 +2343,28 @@
                             <div class="results-stat-icon">🎬</div>
                             <div class="results-stat-content">
                                 <div class="results-stat-value" id="totalClipsCount">0</div>
-                                <div class="results-stat-label">Clips générés</div>
+                                <div class="results-stat-label" data-i18n="results.stat.clips">Clips générés</div>
                             </div>
                         </div>
                         <div class="results-stat-card">
                             <div class="results-stat-icon">⭐</div>
                             <div class="results-stat-content">
                                 <div class="results-stat-value" id="avgScoreDisplay">-</div>
-                                <div class="results-stat-label">Score moyen</div>
+                                <div class="results-stat-label" data-i18n="results.stat.score">Score moyen</div>
                             </div>
                         </div>
                         <div class="results-stat-card">
                             <div class="results-stat-icon">⏱️</div>
                             <div class="results-stat-content">
                                 <div class="results-stat-value" id="totalDurationDisplay">-</div>
-                                <div class="results-stat-label">Durée totale</div>
+                                <div class="results-stat-label" data-i18n="results.stat.duration">Durée totale</div>
                             </div>
                         </div>
                         <div class="results-stat-card">
                             <div class="results-stat-icon">📦</div>
                             <div class="results-stat-content">
                                 <div class="results-stat-value" id="totalSizeDisplay">-</div>
-                                <div class="results-stat-label">Taille totale</div>
+                                <div class="results-stat-label" data-i18n="results.stat.size">Taille totale</div>
                             </div>
                         </div>
                     </div>
@@ -2279,7 +2372,7 @@
                     <!-- Results -->
                     <div class="results show" id="results">
                         <div class="results-header">
-                            <h2 class="results-title">Vos clips</h2>
+                            <h2 class="results-title" data-i18n="results.your.clips">Vos clips</h2>
                             <span class="results-count" id="resultsCount"></span>
                         </div>
 
@@ -2294,6 +2387,319 @@
     </div>
 
     <script>
+        // === I18N TRANSLATION SYSTEM ===
+        const translations = {
+            fr: {
+                // Sidebar
+                'nav.steps': 'Étapes',
+                'nav.source': 'Source',
+                'nav.source.sub.local': 'Fichier local',
+                'nav.source.sub.youtube': 'Vidéo YouTube',
+                'nav.analyze': 'Analyse',
+                'nav.analyze.sub': 'En attente',
+                'nav.config': 'Configuration',
+                'nav.config.sub': 'Paramètres',
+                'nav.generate': 'Génération',
+                'nav.generate.sub': 'Traitement',
+                'nav.results': 'Résultats',
+                'nav.results.sub': 'Clips générés',
+
+                // Titlebar
+                'titlebar.theme': 'Changer de thème',
+
+                // Step 1: Source
+                'source.title': 'Selectionner la video source',
+                'source.desc': 'Importez un fichier video ou collez un lien YouTube',
+                'source.tab.local': 'Fichier local',
+                'source.tab.youtube': 'Lien YouTube',
+                'source.drop.title': 'Cliquez pour sélectionner une vidéo',
+                'source.drop.subtitle': 'ou glissez-déposez votre fichier ici',
+                'source.drop.formats': 'MP4, MOV, AVI, MKV, WebM',
+                'source.youtube.label': 'URL de la video YouTube',
+                'source.youtube.placeholder': 'https://www.youtube.com/watch?v=...',
+                'source.youtube.hint': 'Formats acceptes : youtube.com/watch?v=... ou youtu.be/...',
+                'source.youtube.loading': 'Chargement de l\'aperçu vidéo...',
+                'source.youtube.unavailable': 'Vidéo indisponible',
+                'source.youtube.unavailable.msg': 'Cette vidéo est indisponible, privée ou supprimée.',
+                'source.youtube.default.title': 'Titre de la vidéo',
+                'source.youtube.default.channel': 'Nom de la chaîne',
+                'source.youtube.duration': 'Durée',
+                'source.youtube.format': 'Format: 16:9',
+                'source.btn.next': 'Suivant',
+                'source.url.invalid': 'URL invalide',
+                'source.url.valid': 'URL valide',
+
+                // Step 2: Analysis
+                'analyze.title': '🔍 Analyse en cours',
+                'analyze.desc': 'Détection automatique du type de contenu',
+                'analyze.status': 'Analyse de votre vidéo...',
+                'analyze.substatus': 'Détection du type de contenu en cours',
+                'analyze.step.download': 'Chargement',
+                'analyze.step.transcribe': 'Transcription',
+                'analyze.step.detect': 'Détection',
+                'analyze.btn.back': 'Retour',
+                'analyze.btn.next': 'Suivant',
+                'analyze.downloading': 'Téléchargement',
+                'analyze.transcribing': 'Transcription Whisper',
+                'analyze.detecting': 'Détection du type de contenu',
+                'analyze.complete': 'Analyse terminée !',
+                'analyze.complete.sub': 'Vidéo analysée avec succès',
+                'analyze.error': 'Erreur d\'analyse',
+                'analyze.error.start': 'Impossible de démarrer l\'analyse',
+
+                // Step 3: Config
+                'config.title': '⚙️ Configurer les paramètres',
+                'config.desc': 'Personnalisez la génération de vos clips selon vos besoins',
+                'config.content.type': 'Type de contenu',
+                'config.preset.podcast': 'Podcast',
+                'config.preset.podcast.desc': 'Interviews, discussions et talk-shows',
+                'config.preset.gaming': 'Gaming',
+                'config.preset.gaming.desc': 'Clips de jeux et meilleurs moments',
+                'config.preset.vlog': 'Vlog',
+                'config.preset.vlog.desc': 'Lifestyle, voyages et quotidien',
+                'config.preset.tutorial': 'Tutoriel',
+                'config.preset.tutorial.desc': 'Guides, formations et how-to',
+                'config.params': 'Paramètres',
+                'config.min.duration': '⏱️ Durée min (secondes)',
+                'config.max.duration': '⏱️ Durée max (secondes)',
+                'config.max.clips': '🎞️ Nombre max de clips',
+                'config.max.clips.placeholder': 'Auto',
+                'config.btn.previous': 'Précédent',
+                'config.btn.generate': 'Lancer la génération',
+
+                // Step 4: Generation
+                'generate.title': '🎬 Génération en cours',
+                'generate.desc': 'Suivez la progression du traitement de votre vidéo',
+                'generate.status': 'Préparation de la magie...',
+                'generate.substatus': 'Votre vidéo est entre de bonnes mains',
+                'generate.step.download': 'Téléchargement',
+                'generate.step.detect': 'Détection',
+                'generate.step.create': 'Création',
+                'generate.step.subtitles': 'Sous-titres',
+
+                // Step 5: Results
+                'results.title': '✅ Clips générés avec succès',
+                'results.desc': 'Vos clips sont automatiquement sauvegardés dans <strong>~/Téléchargements</strong>',
+                'results.stat.clips': 'Clips générés',
+                'results.stat.score': 'Score moyen',
+                'results.stat.duration': 'Durée totale',
+                'results.stat.size': 'Taille totale',
+                'results.your.clips': 'Vos clips',
+                'results.no.clips': 'Aucun clip généré',
+
+                // Progress / Status messages
+                'status.processing': 'Traitement en cours...',
+                'status.preparing': 'Préparation...',
+                'status.download.local': 'Chargement du fichier',
+                'status.download.youtube': 'Téléchargement de la vidéo',
+                'status.download.sub': 'Récupération de votre contenu...',
+                'status.detect': 'Détection des moments viraux',
+                'status.detect.sub': 'Analyse IA en cours...',
+                'status.generate': 'Création des clips',
+                'status.generate.sub': 'Découpage et effets vidéo...',
+                'status.subtitles': 'Ajout des sous-titres',
+                'status.subtitles.sub': 'Animation des sous-titres...',
+                'status.complete': 'Traitement terminé !',
+                'status.complete.sub': 'Vos clips sont prêts',
+                'status.error': 'Une erreur est survenue',
+                'status.error.sub': 'Vérifiez les détails',
+                'status.error.label': 'Erreur',
+
+                // Alerts / Errors
+                'alert.select.video': 'Veuillez sélectionner un fichier vidéo',
+                'alert.enter.url': 'Veuillez entrer une URL YouTube',
+                'alert.native.only': 'Fonction disponible uniquement dans l\'application native',
+                'alert.file.error': 'Erreur lors de la sélection du fichier',
+                'alert.file.native.only': 'La sélection de fichier native n\'est disponible que dans l\'application ClipGenius.\n\nPour le développement en navigateur, utilisez plutôt un lien YouTube.',
+                'alert.connection.lost': 'Impossible de maintenir la connexion au serveur',
+
+                // Misc
+                'step.download.local': 'Chargement',
+                'step.download.youtube': 'Téléchargement',
+                'video.youtube.default': 'Vidéo YouTube',
+                'channel.youtube.default': 'Chaîne YouTube',
+                'preset.label.tutorial': 'Tutoriel',
+                'reset.status': 'Préparation de la magie...',
+                'reset.substatus': 'Votre vidéo est entre de bonnes mains',
+            },
+            en: {
+                // Sidebar
+                'nav.steps': 'Steps',
+                'nav.source': 'Source',
+                'nav.source.sub.local': 'Local file',
+                'nav.source.sub.youtube': 'YouTube video',
+                'nav.analyze': 'Analysis',
+                'nav.analyze.sub': 'Waiting',
+                'nav.config': 'Configuration',
+                'nav.config.sub': 'Settings',
+                'nav.generate': 'Generation',
+                'nav.generate.sub': 'Processing',
+                'nav.results': 'Results',
+                'nav.results.sub': 'Generated clips',
+
+                // Titlebar
+                'titlebar.theme': 'Toggle theme',
+
+                // Step 1: Source
+                'source.title': 'Select the source video',
+                'source.desc': 'Import a video file or paste a YouTube link',
+                'source.tab.local': 'Local file',
+                'source.tab.youtube': 'YouTube link',
+                'source.drop.title': 'Click to select a video',
+                'source.drop.subtitle': 'or drag and drop your file here',
+                'source.drop.formats': 'MP4, MOV, AVI, MKV, WebM',
+                'source.youtube.label': 'YouTube video URL',
+                'source.youtube.placeholder': 'https://www.youtube.com/watch?v=...',
+                'source.youtube.hint': 'Accepted formats: youtube.com/watch?v=... or youtu.be/...',
+                'source.youtube.loading': 'Loading video preview...',
+                'source.youtube.unavailable': 'Video unavailable',
+                'source.youtube.unavailable.msg': 'This video is unavailable, private or deleted.',
+                'source.youtube.default.title': 'Video title',
+                'source.youtube.default.channel': 'Channel name',
+                'source.youtube.duration': 'Duration',
+                'source.youtube.format': 'Format: 16:9',
+                'source.btn.next': 'Next',
+                'source.url.invalid': 'Invalid URL',
+                'source.url.valid': 'Valid URL',
+
+                // Step 2: Analysis
+                'analyze.title': '🔍 Analysis in progress',
+                'analyze.desc': 'Automatic content type detection',
+                'analyze.status': 'Analyzing your video...',
+                'analyze.substatus': 'Content type detection in progress',
+                'analyze.step.download': 'Loading',
+                'analyze.step.transcribe': 'Transcription',
+                'analyze.step.detect': 'Detection',
+                'analyze.btn.back': 'Back',
+                'analyze.btn.next': 'Next',
+                'analyze.downloading': 'Downloading',
+                'analyze.transcribing': 'Whisper Transcription',
+                'analyze.detecting': 'Content type detection',
+                'analyze.complete': 'Analysis complete!',
+                'analyze.complete.sub': 'Video analyzed successfully',
+                'analyze.error': 'Analysis error',
+                'analyze.error.start': 'Unable to start analysis',
+
+                // Step 3: Config
+                'config.title': '⚙️ Configure settings',
+                'config.desc': 'Customize clip generation to your needs',
+                'config.content.type': 'Content type',
+                'config.preset.podcast': 'Podcast',
+                'config.preset.podcast.desc': 'Interviews, discussions and talk shows',
+                'config.preset.gaming': 'Gaming',
+                'config.preset.gaming.desc': 'Game clips and best moments',
+                'config.preset.vlog': 'Vlog',
+                'config.preset.vlog.desc': 'Lifestyle, travel and daily life',
+                'config.preset.tutorial': 'Tutorial',
+                'config.preset.tutorial.desc': 'Guides, courses and how-tos',
+                'config.params': 'Settings',
+                'config.min.duration': '⏱️ Min duration (seconds)',
+                'config.max.duration': '⏱️ Max duration (seconds)',
+                'config.max.clips': '🎞️ Max number of clips',
+                'config.max.clips.placeholder': 'Auto',
+                'config.btn.previous': 'Previous',
+                'config.btn.generate': 'Start generation',
+
+                // Step 4: Generation
+                'generate.title': '🎬 Generation in progress',
+                'generate.desc': 'Follow the progress of your video processing',
+                'generate.status': 'Preparing the magic...',
+                'generate.substatus': 'Your video is in good hands',
+                'generate.step.download': 'Download',
+                'generate.step.detect': 'Detection',
+                'generate.step.create': 'Creation',
+                'generate.step.subtitles': 'Subtitles',
+
+                // Step 5: Results
+                'results.title': '✅ Clips generated successfully',
+                'results.desc': 'Your clips are automatically saved in <strong>~/Downloads</strong>',
+                'results.stat.clips': 'Generated clips',
+                'results.stat.score': 'Average score',
+                'results.stat.duration': 'Total duration',
+                'results.stat.size': 'Total size',
+                'results.your.clips': 'Your clips',
+                'results.no.clips': 'No clips generated',
+
+                // Progress / Status messages
+                'status.processing': 'Processing...',
+                'status.preparing': 'Preparing...',
+                'status.download.local': 'Loading file',
+                'status.download.youtube': 'Downloading video',
+                'status.download.sub': 'Retrieving your content...',
+                'status.detect': 'Detecting viral moments',
+                'status.detect.sub': 'AI analysis in progress...',
+                'status.generate': 'Creating clips',
+                'status.generate.sub': 'Cutting and video effects...',
+                'status.subtitles': 'Adding subtitles',
+                'status.subtitles.sub': 'Animating subtitles...',
+                'status.complete': 'Processing complete!',
+                'status.complete.sub': 'Your clips are ready',
+                'status.error': 'An error occurred',
+                'status.error.sub': 'Check the details',
+                'status.error.label': 'Error',
+
+                // Alerts / Errors
+                'alert.select.video': 'Please select a video file',
+                'alert.enter.url': 'Please enter a YouTube URL',
+                'alert.native.only': 'Feature only available in the native app',
+                'alert.file.error': 'Error selecting the file',
+                'alert.file.native.only': 'Native file selection is only available in the ClipGenius app.\n\nFor browser development, use a YouTube link instead.',
+                'alert.connection.lost': 'Unable to maintain connection to server',
+
+                // Misc
+                'step.download.local': 'Loading',
+                'step.download.youtube': 'Download',
+                'video.youtube.default': 'YouTube Video',
+                'channel.youtube.default': 'YouTube Channel',
+                'preset.label.tutorial': 'Tutorial',
+                'reset.status': 'Preparing the magic...',
+                'reset.substatus': 'Your video is in good hands',
+            }
+        };
+
+        // Detect language: French if browser is fr*, English otherwise
+        function getLang() {
+            return (navigator.language || navigator.userLanguage || 'en').startsWith('fr') ? 'fr' : 'en';
+        }
+
+        const currentLang = getLang();
+        document.documentElement.lang = currentLang;
+
+        // Translation helper
+        function t(key) {
+            return (translations[currentLang] && translations[currentLang][key])
+                || (translations['fr'] && translations['fr'][key])
+                || key;
+        }
+
+        // Apply translations to all elements with data-i18n or data-i18n-html attributes
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                const val = t(key);
+                if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'url' || el.type === 'number')) {
+                    el.placeholder = val;
+                } else if (el.hasAttribute('title')) {
+                    el.title = val;
+                    if (!el.children.length) el.textContent = val;
+                } else {
+                    el.textContent = val;
+                }
+            });
+            document.querySelectorAll('[data-i18n-html]').forEach(el => {
+                const key = el.getAttribute('data-i18n-html');
+                el.innerHTML = t(key);
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                el.placeholder = t(key);
+            });
+            document.querySelectorAll('[data-i18n-title]').forEach(el => {
+                const key = el.getAttribute('data-i18n-title');
+                el.title = t(key);
+            });
+        }
+
         // === THEME MANAGEMENT ===
         function getSystemTheme() {
             return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -2380,7 +2786,7 @@
             if (typeof pywebview !== 'undefined' && pywebview.api) {
                 pywebview.api.open_output_folder();
             } else {
-                alert('Fonction disponible uniquement dans l\'application native');
+                alert(t('alert.native.only'));
             }
         }
 
@@ -2481,7 +2887,7 @@
             // Update sidebar subtitle
             const sourceNavSubtitle = document.getElementById('sourceNavSubtitle');
             if (sourceNavSubtitle) {
-                sourceNavSubtitle.textContent = sourceType === 'local' ? 'Fichier local' : 'Vidéo YouTube';
+                sourceNavSubtitle.textContent = sourceType === 'local' ? t('nav.source.sub.local') : t('nav.source.sub.youtube');
             }
             
             // Update next button state
@@ -2520,11 +2926,11 @@
                     }
                 } catch (e) {
                     console.error('Erreur sélection fichier:', e);
-                    alert('Erreur lors de la sélection du fichier');
+                    alert(t('alert.file.error'));
                 }
             } else {
                 // Fallback pour le navigateur (mode dev)
-                alert('La sélection de fichier native n\'est disponible que dans l\'application ClipGenius.\n\nPour le développement en navigateur, utilisez plutôt un lien YouTube.');
+                alert(t('alert.file.native.only'));
             }
         }
 
@@ -2562,9 +2968,9 @@
             // Reset sidebar subtitle
             const sourceNavSubtitle = document.getElementById('sourceNavSubtitle');
             if (sourceNavSubtitle) {
-                sourceNavSubtitle.textContent = 'Fichier local';
+                sourceNavSubtitle.textContent = t('nav.source.sub.local');
             }
-            
+
             updateSourceNextButton();
         }
 
@@ -2639,7 +3045,7 @@
             let videoSource = null;
             if (currentSourceType === 'local') {
                 if (!selectedFilePath) {
-                    alert('Veuillez sélectionner un fichier vidéo');
+                    alert(t('alert.select.video'));
                     navigateToStep('source');
                     return;
                 }
@@ -2647,7 +3053,7 @@
             } else {
                 const url = document.getElementById('url').value.trim();
                 if (!url) {
-                    alert('Veuillez entrer une URL YouTube');
+                    alert(t('alert.enter.url'));
                     navigateToStep('source');
                     return;
                 }
@@ -2712,7 +3118,7 @@
                 const { job_id } = await response.json();
                 
                 if (!job_id) {
-                    throw new Error('Impossible de démarrer l\'analyse');
+                    throw new Error(t('analyze.error.start'));
                 }
 
                 // === STEP 2: Stream progress via WebSocket ===
@@ -2775,21 +3181,21 @@
                     if (step === 'download') {
                         activateAnalysisStep('download');
                         progressIcon.textContent = '📥';
-                        progressStatus.textContent = 'Téléchargement';
+                        progressStatus.textContent = t('analyze.downloading');
                         if (message) {
                             setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'transcribe') {
                         activateAnalysisStep('transcribe');
                         progressIcon.textContent = '🎤';
-                        progressStatus.textContent = 'Transcription Whisper';
+                        progressStatus.textContent = t('analyze.transcribing');
                         if (message) {
                             setSubstatusWithSpinner(progressSubstatus, message);
                         }
                     } else if (step === 'detect') {
                         activateAnalysisStep('detect');
                         progressIcon.textContent = '🎯';
-                        progressStatus.textContent = 'Détection du type de contenu';
+                        progressStatus.textContent = t('analyze.detecting');
                         if (message) {
                             setSubstatusWithSpinner(progressSubstatus, message);
                         }
@@ -2804,8 +3210,8 @@
                         // Update UI
                         updateAnalysisProgress(100);
                         progressIcon.textContent = '✅';
-                        progressStatus.textContent = 'Analyse terminée !';
-                        progressSubstatus.textContent = 'Vidéo analysée avec succès';
+                        progressStatus.textContent = t('analyze.complete');
+                        progressSubstatus.textContent = t('analyze.complete.sub');
                         
                         // Fetch final result
                         fetch(`/api/analyze-result/${job_id}`)
@@ -2861,7 +3267,7 @@
                     } else if (step === 'error') {
                         socket.emit('leave_job', { job_id: job_id });
                         socket.off('progress', progressHandler);
-                        throw new Error(message || 'Erreur d\'analyse');
+                        throw new Error(message || t('analyze.error'));
                     }
                 };
                 
@@ -2877,8 +3283,8 @@
                 console.error('Erreur analyse:', error);
                 
                 progressIcon.textContent = '❌';
-                progressStatus.textContent = 'Erreur d\'analyse';
-                progressSubstatus.textContent = error.message || 'Une erreur est survenue';
+                progressStatus.textContent = t('analyze.error');
+                progressSubstatus.textContent = error.message || t('status.error');
                 nextBtn.disabled = false;
             }
         }
@@ -2993,7 +3399,7 @@
             
             if (!videoId) {
                 validationIcon.classList.add('invalid');
-                validationStatus.textContent = 'URL invalide';
+                validationStatus.textContent = t('source.url.invalid');
                 validationStatus.classList.add('invalid');
                 previewCard.style.display = 'none';
                 updateSourceNextButton();
@@ -3002,7 +3408,7 @@
             
             // Valid format - show validation
             validationIcon.classList.add('valid');
-            validationStatus.textContent = 'URL valide';
+            validationStatus.textContent = t('source.url.valid');
             validationStatus.classList.add('valid');
             
             // Désactiver le bouton immédiatement (on va charger les infos)
@@ -3058,12 +3464,12 @@
                     if (durationData.available === false) {
                         // Video is unavailable
                         videoAvailable = false;
-                        errorMessage = durationData.message || 'Cette vidéo est indisponible';
-                        
+                        errorMessage = durationData.message || t('source.youtube.unavailable');
+
                         // Show error
                         loadingDiv.style.display = 'none';
                         errorDiv.style.display = 'flex';
-                        document.getElementById('youtubeErrorTitle').textContent = 'Vidéo indisponible';
+                        document.getElementById('youtubeErrorTitle').textContent = t('source.youtube.unavailable');
                         document.getElementById('youtubeErrorMessage').textContent = errorMessage;
                         
                         // Disable next button (vidéo indisponible)
@@ -3100,7 +3506,7 @@
                 } else if (response.status === 401 || response.status === 404) {
                     // Video likely unavailable
                     videoAvailable = false;
-                    errorMessage = 'Cette vidéo est indisponible ou privée';
+                    errorMessage = t('source.youtube.unavailable.msg');
                 }
             } catch (err) {
             }
@@ -3109,8 +3515,8 @@
             if (!videoAvailable) {
                 loadingDiv.style.display = 'none';
                 errorDiv.style.display = 'flex';
-                document.getElementById('youtubeErrorTitle').textContent = 'Vidéo indisponible';
-                document.getElementById('youtubeErrorMessage').textContent = errorMessage || 'Cette vidéo est indisponible, privée ou supprimée.';
+                document.getElementById('youtubeErrorTitle').textContent = t('source.youtube.unavailable');
+                document.getElementById('youtubeErrorMessage').textContent = errorMessage || t('source.youtube.unavailable.msg');
                 nextBtn.disabled = true;
                 return;
             }
@@ -3118,8 +3524,8 @@
             // Store video data
             currentVideoData = {
                 id: videoId,
-                title: videoTitle || `Vidéo YouTube ${videoId}`,
-                channel: videoChannel || 'Chaîne YouTube',
+                title: videoTitle || `${t('video.youtube.default')} ${videoId}`,
+                channel: videoChannel || t('channel.youtube.default'),
                 duration: videoDuration,
                 available: videoAvailable
             };
@@ -3140,7 +3546,7 @@
             if (videoDuration && videoDuration > 0) {
                 const durationStr = formatDuration(videoDuration);
                 durationStat.parentElement.style.display = 'flex';
-                durationStat.textContent = `Durée: ${durationStr}`;
+                durationStat.textContent = `${t('source.youtube.duration')}: ${durationStr}`;
             } else {
                 // Masquer complètement la durée si non disponible
                 durationStat.parentElement.style.display = 'none';
@@ -3264,10 +3670,10 @@
             const configNavSubtitle = document.getElementById('configNavSubtitle');
             if (configNavSubtitle) {
                 const presetLabels = {
-                    'podcast': 'Podcast',
-                    'gaming': 'Gaming',
-                    'vlog': 'Vlog',
-                    'tutorial': 'Tutoriel'
+                    'podcast': t('config.preset.podcast'),
+                    'gaming': t('config.preset.gaming'),
+                    'vlog': t('config.preset.vlog'),
+                    'tutorial': t('config.preset.tutorial')
                 };
                 const label = presetLabels[presetName] || presetName.charAt(0).toUpperCase() + presetName.slice(1);
                 configNavSubtitle.textContent = isAuto ? `${label} (auto)` : label;
@@ -3968,8 +4374,9 @@
             }, 300);
         }
 
-        // Load recent videos on page load
+        // Load recent videos on page load and apply translations
         document.addEventListener('DOMContentLoaded', () => {
+            applyTranslations();
             loadRecentVideos();
         });
 
@@ -4015,7 +4422,7 @@
 
                 startTime = savedState.startTime;
                 progressSection.classList.add('running');
-                titlebarStatus.textContent = 'Traitement en cours...';
+                titlebarStatus.textContent = t('status.processing');
                 
                 // Set nav state to generation
                 const generateNavItem = document.querySelector(`.nav-item[data-step="generate"]`);
@@ -4061,8 +4468,8 @@
                     progressSection.classList.remove('running');
                     progressSection.classList.add('error');
                     setStep('error');
-                    if (progressStatus) progressStatus.textContent = status.error || 'Une erreur est survenue';
-                    titlebarStatus.textContent = 'Erreur';
+                    if (progressStatus) progressStatus.textContent = status.error || t('status.error');
+                    titlebarStatus.textContent = t('status.error.label');
                     
                     const generateNavItem = document.querySelector(`.nav-item[data-step="generate"]`);
                     generateNavItem.classList.remove('processing');
@@ -4157,7 +4564,7 @@
             const attemptReconnect = () => {
                 if (reconnectAttempts >= maxReconnectAttempts) {
                     logConnection(`Échec après ${maxReconnectAttempts} tentatives`, 'error');
-                    handleJobError('Impossible de maintenir la connexion au serveur');
+                    handleJobError(t('alert.connection.lost'));
                     return;
                 }
                 
@@ -4221,7 +4628,7 @@
                         } else if (status.status === 'failed') {
                             logConnection('Job échoué (détecté par polling)', 'error');
                             cleanupAllConnections();
-                            handleJobError(status.error || 'Erreur inconnue');
+                            handleJobError(status.error || t('status.error'));
                         }
                     })
                     .catch(err => {
@@ -4338,7 +4745,7 @@
                 if (msg.step === 'error') {
                     logConnection('❌ Job échoué (message WebSocket)', 'error');
                     cleanupAllConnections();
-                    handleJobError(msg.message || 'Une erreur est survenue');
+                    handleJobError(msg.message || t('status.error'));
                 }
             };
             
@@ -4429,12 +4836,12 @@
             progressSection.classList.remove('running');
             progressSection.classList.add('error');
             setStep('error');
-            titlebarStatus.textContent = 'Erreur';
-            
+            titlebarStatus.textContent = t('status.error.label');
+
             if (progressStatus) {
                 progressStatus.textContent = errorMessage;
             }
-            
+
             const generateNavItem = document.querySelector(`.nav-item[data-step="generate"]`);
             generateNavItem.classList.remove('processing');
             
@@ -4497,14 +4904,14 @@
             currentStep = stepName;
 
             // Update status messages and icons based on step
-            const downloadLabel = currentSourceType === 'local' ? 'Chargement du fichier' : 'Téléchargement de la vidéo';
+            const downloadLabel = currentSourceType === 'local' ? t('status.download.local') : t('status.download.youtube');
             const statusMessages = {
-                'download': { status: downloadLabel, substatus: 'Récupération de votre contenu...', icon: '📥' },
-                'detect': { status: 'Détection des moments viraux', substatus: 'Analyse IA en cours...', icon: '🎯' },
-                'generate': { status: 'Création des clips', substatus: 'Découpage et effets vidéo...', icon: '✂️' },
-                'subtitles': { status: 'Ajout des sous-titres', substatus: 'Animation des sous-titres...', icon: '💬' },
-                'complete': { status: 'Traitement terminé !', substatus: 'Vos clips sont prêts', icon: '✅' },
-                'error': { status: 'Une erreur est survenue', substatus: 'Vérifiez les détails', icon: '❌' }
+                'download': { status: downloadLabel, substatus: t('status.download.sub'), icon: '📥' },
+                'detect': { status: t('status.detect'), substatus: t('status.detect.sub'), icon: '🎯' },
+                'generate': { status: t('status.generate'), substatus: t('status.generate.sub'), icon: '✂️' },
+                'subtitles': { status: t('status.subtitles'), substatus: t('status.subtitles.sub'), icon: '💬' },
+                'complete': { status: t('status.complete'), substatus: t('status.complete.sub'), icon: '✅' },
+                'error': { status: t('status.error'), substatus: t('status.error.sub'), icon: '❌' }
             };
             
             // Use visualStep for status message lookup
@@ -4618,7 +5025,7 @@
                 if (!clips || clips.length === 0) {
                     console.warn('⚠️ Aucun clip à afficher');
                     if (resultsCountElement) resultsCountElement.textContent = '0 clip';
-                    clipsGridElement.innerHTML = '<p style="padding: 40px; text-align: center; color: var(--text-secondary);">Aucun clip généré</p>';
+                    clipsGridElement.innerHTML = `<p style="padding: 40px; text-align: center; color: var(--text-secondary);">${t('results.no.clips')}</p>`;
                     // Mettre à jour les stats à zéro
                     document.getElementById('totalClipsCount').textContent = '0';
                     document.getElementById('avgScoreDisplay').textContent = '0.00';
@@ -4664,7 +5071,7 @@
                 
             } catch (err) {
                 console.error('❌ Erreur showResults:', err);
-                alert('Erreur lors de l\'affichage des clips: ' + err.message);
+                alert(t('status.error.label') + ': ' + err.message);
             }
         }
 
@@ -4708,7 +5115,7 @@
                 if (!clipsToShow || clipsToShow.length === 0) {
                     console.warn('⚠️ Aucun clip à rendre');
                     if (resultsCountElement) resultsCountElement.textContent = '0 clip';
-                    clipsGridElement.innerHTML = '<p style="padding: 40px; text-align: center; color: var(--text-secondary);">Aucun clip généré</p>';
+                    clipsGridElement.innerHTML = `<p style="padding: 40px; text-align: center; color: var(--text-secondary);">${t('results.no.clips')}</p>`;
                     return;
                 }
                 
@@ -4738,7 +5145,7 @@
             
         } catch (err) {
             console.error('Erreur renderClips:', err);
-            alert('Erreur lors du rendu des clips: ' + err.message);
+            alert(t('status.error.label') + ': ' + err.message);
         }
         }
 
@@ -4760,15 +5167,15 @@
             // Reset download step name based on source type
             const downloadStepName = document.getElementById('downloadStepName');
             if (downloadStepName) {
-                downloadStepName.textContent = currentSourceType === 'local' ? 'Chargement' : 'Téléchargement';
+                downloadStepName.textContent = currentSourceType === 'local' ? t('step.download.local') : t('step.download.youtube');
             }
-            
+
             progressSection.classList.remove('complete', 'error', 'running');
             resetProgress();
-            
+
             // Reset status messages
-            if (progressStatus) progressStatus.textContent = 'Préparation de la magie...';
-            if (progressSubstatus) progressSubstatus.textContent = 'Votre vidéo est entre de bonnes mains';
+            if (progressStatus) progressStatus.textContent = t('reset.status');
+            if (progressSubstatus) progressSubstatus.textContent = t('reset.substatus');
             if (progressIcon) progressIcon.textContent = '🎬';
             titlebarStatus.textContent = '';
             
@@ -4872,16 +5279,16 @@
             reset();
             
             // Initialize status for new job
-            if (progressStatus) progressStatus.textContent = 'Préparation...';
-            titlebarStatus.textContent = 'Préparation...';
+            if (progressStatus) progressStatus.textContent = t('status.preparing');
+            titlebarStatus.textContent = t('status.preparing');
 
             // Adapt download step name based on source type
             const downloadStepName = document.getElementById('downloadStepName');
             if (downloadStepName) {
                 if (currentSourceType === 'local') {
-                    downloadStepName.textContent = 'Chargement';
+                    downloadStepName.textContent = t('step.download.local');
                 } else {
-                    downloadStepName.textContent = 'Téléchargement';
+                    downloadStepName.textContent = t('step.download.youtube');
                 }
             }
 
@@ -4941,7 +5348,7 @@
                     progressSection.classList.add('error');
                     setStep('error');
                     if (progressStatus) progressStatus.textContent = json.error;
-                    titlebarStatus.textContent = 'Erreur';
+                    titlebarStatus.textContent = t('status.error.label');
                     return;
                 }
 
@@ -4953,8 +5360,8 @@
                 progressSection.classList.remove('running');
                 progressSection.classList.add('error');
                 setStep('error');
-                if (progressStatus) progressStatus.textContent = 'Erreur: ' + err.message;
-                titlebarStatus.textContent = 'Erreur';
+                if (progressStatus) progressStatus.textContent = t('status.error.label') + ': ' + err.message;
+                titlebarStatus.textContent = t('status.error.label');
             });
         }
 
