@@ -1,32 +1,32 @@
 # ClipGenius
 
-Generateur de clips viraux 100% local. Transforme des videos YouTube ou locales en shorts verticaux (9:16) optimises pour TikTok, Instagram Reels et YouTube Shorts.
+100% local viral clip generator. Transforms YouTube or local videos into vertical shorts (9:16) optimized for TikTok, Instagram Reels, and YouTube Shorts.
 
-Toute l'analyse est faite sur votre machine : aucune donnee ne quitte votre ordinateur.
+All analysis runs on your machine — no data ever leaves your computer.
 
 ---
 
-## Fonctionnalites
+## Features
 
 | Module | Description |
 |--------|-------------|
-| **Analyse IA** | Detection des moments viraux via Phi-4-mini (offline, llama.cpp) |
-| **Recadrage intelligent** | Suivi de visage MediaPipe + remplissage flou pour le format vertical |
-| **Sous-titres animes** | Transcription Whisper locale, rendu style TikTok |
-| **Hook Optimizer** | Optimisation automatique des 3 premieres secondes |
-| **Presets** | Podcast, Gaming, Vlog, Tutoriel -- detection automatique du type |
-| **Interface native** | Flask + PyWebView, pas de navigateur externe |
+| **AI Analysis** | Viral moment detection via Phi-4-mini (offline, llama.cpp) |
+| **Smart Cropping** | MediaPipe face tracking + blur-fill for vertical format |
+| **Animated Subtitles** | Local Whisper transcription, TikTok-style rendering |
+| **Hook Optimizer** | Automatic optimization of the first 3 seconds |
+| **Presets** | Podcast, Gaming, Vlog, Tutorial — automatic content type detection |
+| **Native Interface** | Flask + PyWebView, no external browser required |
 
 ---
 
-## Prerequis
+## Requirements
 
-- macOS (Apple Silicon recommande)
+- macOS (Apple Silicon recommended)
 - Python 3.10+
 - FFmpeg
 
 ```bash
-# Installer FFmpeg (macOS)
+# Install FFmpeg (macOS)
 brew install ffmpeg
 ```
 
@@ -35,63 +35,63 @@ brew install ffmpeg
 ## Installation
 
 ```bash
-git clone https://github.com/votre-username/ClipGenius.git
+git clone https://github.com/Zeffut/ClipGenius.git
 cd ClipGenius/App
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Le modele Phi-4-mini est telecharge automatiquement au premier lancement.
+The Phi-4-mini model is downloaded automatically on first launch.
 
 ---
 
-## Utilisation
+## Usage
 
 ```bash
 cd App
 python app.py
 ```
 
-L'interface s'ouvre dans une fenetre native. Le workflow :
+The interface opens in a native window. Workflow:
 
-1. **Source** -- Coller une URL YouTube ou selectionner un fichier local
-2. **Preset** -- Choix automatique selon le contenu (ou selection manuelle)
-3. **Parametres** -- Ajuster duree, nombre de clips, score minimum
-4. **Generation** -- Les clips sont crees et sauvegardes dans `~/Telechargements`
+1. **Source** — Paste a YouTube URL or select a local file
+2. **Preset** — Automatic selection based on content (or manual override)
+3. **Settings** — Adjust duration, number of clips, minimum score
+4. **Generation** — Clips are created and saved to `~/Downloads`
 
 ---
 
 ## Presets
 
-| Preset | Duree | Score min | Adapte pour |
-|--------|-------|-----------|-------------|
-| Podcast | 30-90s | 0.75 | Interviews, discussions, debates |
-| Gaming | 15-60s | 0.80 | Clutch, moments epiques, highlights |
-| Vlog | 15-60s | 0.70 | Storytelling, challenges, routines |
-| Tutoriel | 45-120s | 0.70 | How-to, tips, demonstrations |
+| Preset | Duration | Min Score | Best For |
+|--------|----------|-----------|----------|
+| Podcast | 30–90s | 0.75 | Interviews, discussions, debates |
+| Gaming | 15–60s | 0.80 | Clutch plays, epic moments, highlights |
+| Vlog | 15–60s | 0.70 | Storytelling, challenges, routines |
+| Tutorial | 45–120s | 0.70 | How-to, tips, demonstrations |
 
 ---
 
-## Structure du projet
+## Project Structure
 
 ```
 App/
-  app.py                  Point d'entree (PyWebView)
-  web_app.py              Serveur Flask + SocketIO
+  app.py                  Entry point (PyWebView)
+  web_app.py              Flask + SocketIO server
   src/
-    ai_analyzer.py        Analyse IA locale (Phi-4-mini)
-    local_llm.py          Interface llama.cpp
-    viral_detector.py     Detection audio/video (fallback)
-    smart_cropper.py      Recadrage + suivi MediaPipe
-    clip_generator.py     Pipeline de generation
-    subtitles.py          Transcription Whisper
-    enriched_subtitles.py Sous-titres animes
-    hook_optimizer.py     Optimisation du hook
-    adaptive_duration.py  Durees par plateforme
-    presets.py            Configuration des presets
+    ai_analyzer.py        Local AI analysis (Phi-4-mini)
+    local_llm.py          llama.cpp interface
+    viral_detector.py     Audio/video detection (fallback)
+    smart_cropper.py      Cropping + MediaPipe tracking
+    clip_generator.py     Generation pipeline
+    subtitles.py          Whisper transcription
+    enriched_subtitles.py Animated subtitles
+    hook_optimizer.py     Hook optimization
+    adaptive_duration.py  Platform-specific durations
+    presets.py            Preset configuration
   web/templates/
-    index.html            Interface complete (SPA)
-  tests/                  Suite de tests
+    index.html            Full interface (SPA)
+  tests/                  Test suite
 ```
 
 ---
@@ -101,13 +101,13 @@ App/
 ```bash
 cd App
 
-# Tests complets
+# Full test suite
 python tests/test_pipeline.py
 
-# Tests rapides (imports uniquement)
+# Quick tests (imports only)
 python tests/test_pipeline.py --quick
 
-# Tests individuels
+# Individual tests
 python tests/test_import.py
 python tests/test_local_llm.py
 python tests/test_subtitles.py
@@ -115,23 +115,23 @@ python tests/test_subtitles.py
 
 ---
 
-## Depannage
+## Troubleshooting
 
-**FFmpeg introuvable** -- Verifier avec `ffmpeg -version`, reinstaller via `brew install ffmpeg`.
+**FFmpeg not found** — Verify with `ffmpeg -version`, reinstall via `brew install ffmpeg`.
 
-**Aucun clip genere** -- Baisser le score minimum (0.70 recommande) ou la duree minimale.
+**No clips generated** — Lower the minimum score (0.70 recommended) or the minimum duration.
 
-**Port occupe** -- Liberer le port 5001 : `lsof -ti:5001 | xargs kill -9`, puis relancer.
-
----
-
-## Stack technique
-
-Python -- MoviePy -- OpenCV -- MediaPipe -- Whisper (mlx-whisper) -- FFmpeg -- Flask -- SocketIO -- PyWebView -- Click -- Rich -- llama.cpp (Phi-4-mini)
+**Port in use** — Free port 5001: `lsof -ti:5001 | xargs kill -9`, then relaunch.
 
 ---
 
-## Licence
+## Tech Stack
+
+Python · MoviePy · OpenCV · MediaPipe · Whisper (mlx-whisper) · FFmpeg · Flask · SocketIO · PyWebView · Click · Rich · llama.cpp (Phi-4-mini)
+
+---
+
+## License
 
 MIT
 

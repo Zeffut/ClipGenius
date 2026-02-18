@@ -1,41 +1,41 @@
-# Structure du Projet ClipGenius
+# ClipGenius Project Structure
 
-## 📂 Arborescence
+## Directory Tree
 
 ```
 ClipGenius/
-├── 📁 App/                       # Application principale
-│   ├── 🚀 app.py                    # Point d'entrée (PyWebView wrapper)
-│   ├── 🌐 web_app.py                # Serveur Flask + API routes
-│   ├── 📦 requirements.txt          # Dépendances Python
-│   ├── ⚙️ .env.example              # Template configuration API
+├── App/                              # Main application
+│   ├── app.py                           # Entry point (PyWebView wrapper)
+│   ├── web_app.py                       # Flask server + API routes
+│   ├── requirements.txt                 # Python dependencies
+│   ├── .env.example                     # API configuration template
 │   │
-│   ├── 🏗️ build_mac.py              # Script build macOS .app
-│   ├── 🏗️ build_mac.sh              # Shell script build .dmg
+│   ├── build_mac.py                     # macOS .app build script
+│   ├── build_mac.sh                     # .dmg build shell script
 │   │
-│   ├── 📁 src/                      # Modules Python (14.5k lignes)
+│   ├── src/                             # Python modules (~14.5k lines)
 │   │   ├── __init__.py
-│   │   ├── downloader.py               # yt-dlp YouTube downloader
-│   │   ├── ai_analyzer.py              # Analyse IA locale Phi-4-mini
-│   │   ├── local_llm.py                # Phi-4-mini local offline
-│   │   ├── viral_detector.py           # Audio/video fallback
-│   │   ├── smart_cropper.py            # MediaPipe face detection
-│   │   ├── clip_generator.py           # Pipeline principal
-│   │   ├── subtitles.py                # Whisper transcription
-│   │   ├── enriched_subtitles.py       # Sous-titres TikTok animés
-│   │   ├── hook_optimizer.py           # Hook 3 secondes
-│   │   ├── adaptive_duration.py        # Durées adaptatives
-│   │   ├── advanced_audio_analyzer.py  # Émotions/événements
-│   │   ├── audio_overlay.py            # Musique de fond
-│   │   ├── thumbnail_generator.py      # Miniatures
-│   │   ├── auto_config.py              # Auto-configuration
-│   │   └── presets.py                  # Configurations presets
+│   │   ├── downloader.py                  # yt-dlp YouTube downloader
+│   │   ├── ai_analyzer.py                 # Local AI analysis (Phi-4-mini)
+│   │   ├── local_llm.py                   # Phi-4-mini local offline
+│   │   ├── viral_detector.py              # Audio/video fallback
+│   │   ├── smart_cropper.py               # MediaPipe face detection
+│   │   ├── clip_generator.py              # Main pipeline
+│   │   ├── subtitles.py                   # Whisper transcription
+│   │   ├── enriched_subtitles.py          # TikTok-style animated subtitles
+│   │   ├── hook_optimizer.py              # 3-second hook optimizer
+│   │   ├── adaptive_duration.py           # Adaptive durations
+│   │   ├── advanced_audio_analyzer.py     # Emotions/events
+│   │   ├── audio_overlay.py               # Background music
+│   │   ├── thumbnail_generator.py         # Thumbnails
+│   │   ├── auto_config.py                 # Auto-configuration
+│   │   └── presets.py                     # Preset configurations
 │   │
-│   ├── 🌐 web/                      # Interface web
+│   ├── web/                             # Web interface
 │   │   └── templates/
-│   │       └── index.html              # UI complète
+│   │       └── index.html                 # Full UI
 │   │
-│   ├── 🧪 tests/                    # Tests unitaires
+│   ├── tests/                           # Unit tests
 │   │   ├── test_import.py
 │   │   ├── test_local_llm.py
 │   │   ├── test_pipeline.py
@@ -43,143 +43,143 @@ ClipGenius/
 │   │   ├── test_server.py
 │   │   └── test_subtitles.py
 │   │
-│   ├── 🎨 assets/                   # Ressources statiques
-│   │   └── fonts/                      # Polices pour sous-titres
+│   ├── assets/                          # Static resources
+│   │   └── fonts/                         # Subtitle fonts
 │   │
-│   ├── 🤖 models/                   # Modèles LLM locaux (gitignored)
-│   ├── 📥 downloads/                # Vidéos YouTube (temporaire)
-│   ├── 📤 uploads/                  # Fichiers uploadés (temporaire)
-│   └── 📤 output/                   # Clips générés
+│   ├── models/                          # Local LLM models (gitignored)
+│   ├── downloads/                       # YouTube videos (temporary)
+│   ├── uploads/                         # Uploaded files (temporary)
+│   └── output/                          # Generated clips
 │
-├── 📁 Site/                      # Website (coming soon)
+├── Site/                             # Website (coming soon)
 │
-├── 📖 README.md                  # Documentation utilisateur
-├── 🤖 AGENTS.md                  # Documentation pour agents IA
-├── 📋 STRUCTURE.md               # Ce fichier
-├── 📋 CHANGELOG.md               # Historique des versions
-├── 🚫 .gitignore                 # Fichiers exclus de Git
-└── 📝 .gitattributes             # Configuration Git
+├── README.md                         # User documentation
+├── AGENTS.md                         # AI agent documentation
+├── STRUCTURE.md                      # This file
+├── CHANGELOG.md                      # Version history
+├── .gitignore                        # Git-excluded files
+└── .gitattributes                    # Git configuration
 ```
 
-## 📊 Statistiques
+## Statistics
 
-- **Total lignes de code** : ~14,500 lignes Python + 4,500 lignes HTML/JS
-- **Modules source** : 16 fichiers Python
-- **Taille projet** : 6.3GB (dont 4.5GB de modèles LLM)
-- **Tests** : 6 fichiers de test
+- **Total lines of code**: ~14,500 lines Python + 4,500 lines HTML/JS
+- **Source modules**: 16 Python files
+- **Project size**: 6.3 GB (including 4.5 GB of LLM models)
+- **Tests**: 6 test files
 
-## 🎯 Points d'entrée
+## Entry Points
 
-### Utilisateur Final
+### End User
 ```bash
 cd App
 python app.py
 ```
-Lance l'application native avec PyWebView.
+Launches the native application with PyWebView.
 
-### Développeur - Tests
+### Developer — Tests
 ```bash
 cd App
-python tests/test_pipeline.py                    # Tests complets
-python tests/test_pipeline.py --quick            # Tests rapides (imports)
-python tests/test_pipeline.py --with-video video.mp4  # Tests avec vidéo
-python tests/test_import.py                      # Tests imports
-python tests/test_local_llm.py                   # Tests LLM local
-python tests/test_server.py                      # Tests serveur Flask
-python tests/test_subtitles.py                   # Tests sous-titres
+python tests/test_pipeline.py                    # Full test suite
+python tests/test_pipeline.py --quick            # Quick tests (imports)
+python tests/test_pipeline.py --with-video video.mp4  # Tests with video
+python tests/test_import.py                      # Import tests
+python tests/test_local_llm.py                   # Local LLM tests
+python tests/test_server.py                      # Flask server tests
+python tests/test_subtitles.py                   # Subtitle tests
 ```
 
-### Développeur - Build
+### Developer — Build
 ```bash
 cd App
-./build_mac.sh              # Build complet .app + .dmg
-python build_mac.py         # Build .app seulement
+./build_mac.sh              # Full build (.app + .dmg)
+python build_mac.py         # Build .app only
 ```
 
-## 🔄 Pipeline de Génération
+## Generation Pipeline
 
 ```
-1. downloader.py          → Télécharge vidéo YouTube
-2. ai_analyzer.py         → Analyse contenu (ou local_llm.py)
-3. viral_detector.py      → Fallback audio/video
-4. hook_optimizer.py      → Optimise hook 3s
-5. smart_cropper.py       → Recadrage intelligent
-6. adaptive_duration.py   → Ajuste durées
-7. clip_generator.py      → Génère clips vidéo
-8. subtitles.py           → Transcription Whisper
-9. enriched_subtitles.py  → Sous-titres animés
-10. audio_overlay.py      → Musique de fond
-11. thumbnail_generator.py → Miniatures
+1. downloader.py           → Downloads YouTube video
+2. ai_analyzer.py          → Analyzes content (or local_llm.py)
+3. viral_detector.py       → Audio/video fallback
+4. hook_optimizer.py       → Optimizes 3s hook
+5. smart_cropper.py        → Smart cropping
+6. adaptive_duration.py    → Adjusts durations
+7. clip_generator.py       → Generates video clips
+8. subtitles.py            → Whisper transcription
+9. enriched_subtitles.py   → Animated subtitles
+10. audio_overlay.py       → Background music
+11. thumbnail_generator.py → Thumbnails
 ```
 
-## 📦 Dépendances Clés
+## Key Dependencies
 
-**Traitement Vidéo:**
-- `moviepy>=2.0.0` - Manipulation vidéo
-- `opencv-python>=4.10.0` - Traitement image
-- `mediapipe>=0.10.8` - Détection visages
+**Video Processing:**
+- `moviepy>=2.0.0` — Video manipulation
+- `opencv-python>=4.10.0` — Image processing
+- `mediapipe>=0.10.8` — Face detection
 
-**IA & Audio:**
-- `openai-whisper>=20231117` - Transcription (local)
-- `llama-cpp-python>=0.2.0` - Phi-4-mini local
+**AI & Audio:**
+- `openai-whisper>=20231117` — Transcription (local)
+- `llama-cpp-python>=0.2.0` — Phi-4-mini local
 
 **Interface:**
-- `flask>=3.0.0` - Backend web
-- `pywebview>=5.0.0` - Fenêtre native
-- `yt-dlp>=2023.12.30` - YouTube download
+- `flask>=3.0.0` — Web backend
+- `pywebview>=5.0.0` — Native window
+- `yt-dlp>=2023.12.30` — YouTube download
 
-**Utils:**
-- `click>=8.1.0` - CLI (legacy)
-- `rich>=13.0.0` - Formatage console
-- `python-dotenv>=1.0.0` - Variables env
+**Utilities:**
+- `click>=8.1.0` — CLI (legacy)
+- `rich>=13.0.0` — Console formatting
+- `python-dotenv>=1.0.0` — Environment variables
 
-## 🎨 Presets Disponibles
+## Available Presets
 
-### 🎙️ Podcast (30-90s, score 0.75)
-- Sous-titres clairs, pas d'emojis
-- Détection: interview, discussion, talk
+### Podcast (30–90s, score 0.75)
+- Clean subtitles, no emojis
+- Detection: interview, discussion, talk
 
-### 🎮 Gaming (15-60s, score 0.80)
-- Sous-titres neon, dynamique
-- 350+ mots-clés (Minecraft, Fortnite, etc.)
+### Gaming (15–60s, score 0.80)
+- Neon subtitles, dynamic
+- 350+ keywords (Minecraft, Fortnite, etc.)
 
-### 📹 Vlog (15-60s, score 0.70)
-- Sous-titres + emojis, chaleureux
-- Détection: routine, challenge, lifestyle
+### Vlog (15–60s, score 0.70)
+- Subtitles + emojis, warm tone
+- Detection: routine, challenge, lifestyle
 
-### 🎓 Tutoriel (45-120s, score 0.70)
-- Sous-titres clairs, professionnel
-- 270+ mots-clés (how to, tutorial, code, etc.)
+### Tutorial (45–120s, score 0.70)
+- Clean subtitles, professional
+- 270+ keywords (how to, tutorial, code, etc.)
 
-## 🔐 Sécurité & Privacy
+## Security & Privacy
 
-- **100% local** : Aucune donnée envoyée vers le cloud
-- **Pas de tracking** : Aucune télémétrie
-- **Open source** : Code auditable
-- **Fichiers temporaires** : Auto-nettoyés après génération
+- **100% local**: No data sent to the cloud
+- **No tracking**: Zero telemetry
+- **Open source**: Auditable code
+- **Temporary files**: Auto-cleaned after generation
 
-## 🚀 Performance
+## Performance
 
-- **Background processing** : 2.3x plus rapide (optimisations macOS)
-- **App Nap désactivé** : Traitement continu
-- **Caffeinate** : Empêche la mise en veille
-- **CPU Priority boost** : Processus prioritaire
-- **Cache intelligent** : Réutilisation des transcriptions
+- **Background processing**: 2.3x faster (macOS optimizations)
+- **App Nap disabled**: Continuous processing
+- **Caffeinate**: Prevents sleep mode
+- **CPU priority boost**: High-priority process
+- **Smart caching**: Transcription reuse
 
-## 📝 Conventions Code
+## Code Conventions
 
-- **Langage** : Python 3.9+
-- **Docstrings** : Français
-- **Variables** : English snake_case
-- **Constantes** : UPPER_SNAKE_CASE
-- **Classes** : PascalCase
-- **Type hints** : Obligatoires
-- **Formatage** : 4 espaces, ~100 chars/ligne
+- **Language**: Python 3.9+
+- **Docstrings**: French
+- **Variables**: English snake_case
+- **Constants**: UPPER_SNAKE_CASE
+- **Classes**: PascalCase
+- **Type hints**: Required
+- **Formatting**: 4 spaces, ~100 chars/line
 
-## 🔄 Workflow Git
+## Git Workflow
 
-```bash
-# Fichiers ignorés automatiquement (.gitignore)
+```
+# Automatically ignored (.gitignore)
 - __pycache__/
 - .venv/
 - App/output/
@@ -191,15 +191,15 @@ python build_mac.py         # Build .app seulement
 - .DS_Store
 ```
 
-## 📞 Support
+## Support
 
-- **Issues** : GitHub Issues
-- **Documentation** : README.md
-- **Agents IA** : AGENTS.md
-- **Structure** : Ce fichier (STRUCTURE.md)
+- **Issues**: GitHub Issues
+- **Documentation**: README.md
+- **AI Agents**: AGENTS.md
+- **Structure**: This file (STRUCTURE.md)
 
 ---
 
-**Dernière mise à jour** : 25 janvier 2026
-**Version** : beta
-**Mainteneur** : ClipGenius Team
+**Last updated**: January 25, 2026
+**Version**: beta
+**Maintainer**: ClipGenius Team

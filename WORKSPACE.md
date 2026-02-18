@@ -1,203 +1,203 @@
-# 🧹 Workspace Organization - ClipGenius
+# Workspace Organization — ClipGenius
 
-## 📂 Structure Finale (25 janvier 2026)
+## Final Structure (January 25, 2026)
 
 ```
 ClipGenius/
-├── 📄 Fichiers racine
-│   ├── app.py                  # Wrapper PyWebView → lance web_app.py
-│   ├── web_app.py              # Serveur Flask principal (50k lignes)
-│   ├── requirements.txt        # Dépendances Python
-│   ├── README.md              # Documentation utilisateur
-│   ├── AGENTS.md              # Instructions pour agents IA
-│   ├── STRUCTURE.md           # Architecture détaillée
-│   ├── WORKSPACE.md           # Ce fichier (organisation)
-│   ├── CHANGELOG.md           # Historique des versions
-│   ├── build_mac.py           # Script build macOS .app
-│   └── build_mac.sh           # Script build .dmg
+├── Root Files
+│   ├── app.py                  # PyWebView wrapper → launches web_app.py
+│   ├── web_app.py              # Main Flask server (50k lines)
+│   ├── requirements.txt        # Python dependencies
+│   ├── README.md               # User documentation
+│   ├── AGENTS.md               # AI agent instructions
+│   ├── STRUCTURE.md            # Detailed architecture
+│   ├── WORKSPACE.md            # This file (organization)
+│   ├── CHANGELOG.md            # Version history
+│   ├── build_mac.py            # macOS .app build script
+│   └── build_mac.sh            # .dmg build script
 │
-├── 📁 src/                     # Code source (16 modules Python)
-│   ├── downloader.py          # YouTube downloader
-│   ├── ai_analyzer.py         # Analyse IA locale Phi-4-mini
-│   ├── local_llm.py           # LLM local Phi-4-mini
-│   ├── viral_detector.py      # Fallback audio/video
-│   ├── smart_cropper.py       # MediaPipe face detection
-│   ├── clip_generator.py      # Pipeline principal
-│   ├── subtitles.py           # Whisper transcription
-│   ├── enriched_subtitles.py  # Sous-titres TikTok animés
-│   ├── hook_optimizer.py      # Hook 3 secondes
-│   ├── adaptive_duration.py   # Durées adaptatives
-│   ├── advanced_audio_analyzer.py  # Émotions/événements
-│   ├── audio_overlay.py       # Musique de fond
-│   ├── thumbnail_generator.py # Miniatures
-│   ├── auto_config.py         # Auto-configuration
-│   ├── presets.py             # Configurations presets
-│   ├── ass_to_moviepy.py      # Conversion ASS
-│   └── tiktok_captions.py     # Style TikTok
+├── src/                        # Source code (16 Python modules)
+│   ├── downloader.py           # YouTube downloader
+│   ├── ai_analyzer.py          # Local AI analysis (Phi-4-mini)
+│   ├── local_llm.py            # Local LLM (Phi-4-mini)
+│   ├── viral_detector.py       # Audio/video fallback
+│   ├── smart_cropper.py        # MediaPipe face detection
+│   ├── clip_generator.py       # Main pipeline
+│   ├── subtitles.py            # Whisper transcription
+│   ├── enriched_subtitles.py   # TikTok-style animated subtitles
+│   ├── hook_optimizer.py       # 3-second hook optimizer
+│   ├── adaptive_duration.py    # Adaptive durations
+│   ├── advanced_audio_analyzer.py  # Emotions/events
+│   ├── audio_overlay.py        # Background music
+│   ├── thumbnail_generator.py  # Thumbnails
+│   ├── auto_config.py          # Auto-configuration
+│   ├── presets.py              # Preset configurations
+│   ├── ass_to_moviepy.py       # ASS conversion
+│   └── tiktok_captions.py      # TikTok style
 │
-├── 🧪 tests/                   # Tests unitaires (6 fichiers)
-│   ├── test_import.py         # Tests imports
-│   ├── test_local_llm.py      # Tests LLM local
-│   ├── test_pipeline.py       # Tests pipeline complet
-│   ├── test_visual.py         # Tests effets visuels
-│   ├── test_server.py         # Tests serveur Flask ⬅️ DÉPLACÉ
-│   └── test_subtitles.py      # Tests sous-titres ⬅️ DÉPLACÉ
+├── tests/                      # Unit tests (6 files)
+│   ├── test_import.py          # Import tests
+│   ├── test_local_llm.py       # Local LLM tests
+│   ├── test_pipeline.py        # Full pipeline tests
+│   ├── test_visual.py          # Visual effects tests
+│   ├── test_server.py          # Flask server tests (moved)
+│   └── test_subtitles.py       # Subtitle tests (moved)
 │
-├── 🌐 web/                     # Interface web
+├── web/                        # Web interface
 │   └── templates/
-│       └── index.html         # UI complète (4.5k lignes)
+│       └── index.html          # Full UI (4.5k lines)
 │
-├── 🎨 assets/                  # Ressources statiques
-│   └── fonts/                 # Polices pour sous-titres
+├── assets/                     # Static resources
+│   └── fonts/                  # Subtitle fonts
 │
-├── 🤖 models/                  # Modèles LLM (4.5GB)
+├── models/                     # LLM models (4.5 GB)
 │   ├── Phi-3-mini-4k-instruct-q4.gguf
 │   └── Phi-4-mini-instruct.Q4_K_M.gguf
 │
-├── 📥 downloads/               # Vidéos YouTube (temporaire) - NETTOYÉ ✅
+├── downloads/                  # YouTube videos (temporary) — CLEANED
 │   └── .gitkeep
 │
-├── 📤 uploads/                 # Fichiers uploadés (temporaire)
+├── uploads/                    # Uploaded files (temporary)
 │   └── .gitkeep
 │
-└── 📤 output/                  # Clips générés - NETTOYÉ ✅
+└── output/                     # Generated clips — CLEANED
     └── .gitkeep
 ```
 
 ---
 
-## ✅ Nettoyage effectué
+## Cleanup Performed
 
-### 1. Fichiers déplacés
-- ✅ `test_server.py` → `tests/test_server.py`
-- ✅ `test_subtitles.py` → `tests/test_subtitles.py`
+### 1. Files Moved
+- `test_server.py` → `tests/test_server.py`
+- `test_subtitles.py` → `tests/test_subtitles.py`
 
-### 2. Fichiers supprimés
-- ✅ Tous les `__pycache__/` (racine + src/)
-- ✅ Tous les `.DS_Store` (récursif)
-- ✅ Vidéos dans `downloads/` (921MB libérés)
-- ✅ Clips dans `output/` (609MB libérés)
-- ✅ Fichier `.sanitized_*.mp4` résiduel (274MB libérés)
+### 2. Files Deleted
+- All `__pycache__/` directories (root + src/)
+- All `.DS_Store` files (recursive)
+- Videos in `downloads/` (921 MB freed)
+- Clips in `output/` (609 MB freed)
+- Residual `.sanitized_*.mp4` file (274 MB freed)
 
-**Total libéré** : ~1.8GB
+**Total freed**: ~1.8 GB
 
-### 3. .gitignore amélioré
-- ✅ Ajout de `**/.DS_Store` pour ignorer récursivement
+### 3. Improved .gitignore
+- Added `**/.DS_Store` for recursive ignoring
 
-### 4. Documentation mise à jour
-- ✅ `STRUCTURE.md` : Ajout des 2 nouveaux tests
-- ✅ Date mise à jour : 25 janvier 2026
+### 4. Updated Documentation
+- `STRUCTURE.md`: Added 2 new tests
+- Date updated: January 25, 2026
 
 ---
 
-## 📊 Statistiques finales
+## Final Statistics
 
 ```bash
-# Structure du projet
+# Project structure
 $ du -sh src/ tests/ web/
 442K    src/
 76K     tests/
 20K     web/
 
-# Taille totale (sans modèles)
+# Total size (excluding models)
 $ du -sh --exclude=models --exclude=.venv .
-~1.2GB (dont 538KB de code source)
+~1.2GB (of which 538KB is source code)
 
-# Modèles LLM
+# LLM models
 $ du -sh models/
 4.5GB   models/
 ```
 
 ---
 
-## 🔐 Fichiers .gitignore
+## .gitignore Files
 
-### Ignorés automatiquement
+### Automatically Ignored
 ```
-__pycache__/          # Cache Python
-.venv/                # Environnement virtuel
+__pycache__/          # Python cache
+.venv/                # Virtual environment
 *.DS_Store            # macOS
-output/               # Clips générés
-downloads/            # Vidéos YouTube
-uploads/              # Uploads temporaires
-*.mp4, *.mp3, *.wav   # Fichiers médias
-models/*.gguf         # Modèles LLM
+output/               # Generated clips
+downloads/            # YouTube videos
+uploads/              # Temporary uploads
+*.mp4, *.mp3, *.wav   # Media files
+models/*.gguf         # LLM models
 .env                  # Secrets
 ```
 
-### Trackés dans Git
+### Tracked in Git
 ```
-output/.gitkeep       # Garde le dossier
-downloads/.gitkeep    # Garde le dossier
-uploads/.gitkeep      # Garde le dossier
-models/.gitkeep       # Garde le dossier
+output/.gitkeep       # Keeps the directory
+downloads/.gitkeep    # Keeps the directory
+uploads/.gitkeep      # Keeps the directory
+models/.gitkeep       # Keeps the directory
 ```
 
 ---
 
-## 🎯 Points d'entrée
+## Entry Points
 
 ### Production
 ```bash
-python app.py                  # Lance l'app native (PyWebView)
-python web_app.py              # Lance le serveur Flask seul
+python app.py                  # Launch native app (PyWebView)
+python web_app.py              # Launch Flask server only
 ```
 
 ### Tests
 ```bash
-python tests/test_pipeline.py              # Tests complets
-python tests/test_pipeline.py --quick      # Tests rapides
-python tests/test_server.py                # Tests serveur
-python tests/test_subtitles.py             # Tests sous-titres
+python tests/test_pipeline.py              # Full test suite
+python tests/test_pipeline.py --quick      # Quick tests
+python tests/test_server.py                # Server tests
+python tests/test_subtitles.py             # Subtitle tests
 ```
 
 ### Build
 ```bash
 ./build_mac.sh                 # Build .app + .dmg
-python build_mac.py            # Build .app seul
+python build_mac.py            # Build .app only
 ```
 
 ---
 
-## 📝 Conventions de nommage
+## Naming Conventions
 
-### Fichiers
-- `snake_case.py` - Modules Python
-- `PascalCase` - Classes
-- `UPPER_SNAKE_CASE` - Constantes
-- `test_*.py` - Tests (dans `tests/`)
+### Files
+- `snake_case.py` — Python modules
+- `PascalCase` — Classes
+- `UPPER_SNAKE_CASE` — Constants
+- `test_*.py` — Tests (in `tests/`)
 
 ### Architecture
 ```
 app.py            ← Wrapper (PyWebView)
    ↓ import
-web_app.py        ← Serveur Flask (routes, SSE)
+web_app.py        ← Flask server (routes, SSE)
    ↓ import
-src/*.py          ← Logique métier (16 modules)
+src/*.py          ← Business logic (16 modules)
 ```
 
 ---
 
-## 🚀 Workflow Git
+## Git Workflow
 
-### Avant commit
+### Before Committing
 ```bash
-# Vérifier les fichiers non trackés
+# Check untracked files
 git status
 
-# Vérifier que les dossiers temporaires sont vides
+# Verify temporary directories are empty
 ls output/ downloads/ uploads/
 
-# Vérifier l'absence de __pycache__
+# Verify no __pycache__ present
 find . -name "__pycache__" -type d
 ```
 
-### Commit propre
+### Clean Commit
 ```bash
-# Tous les fichiers sources trackés
+# All tracked source files
 git add src/ tests/ web/
 
-# Fichiers racine
+# Root files
 git add app.py web_app.py requirements.txt
 
 # Documentation
@@ -209,58 +209,58 @@ git add .gitignore .gitattributes .env.example
 # Build
 git add build_mac.py build_mac.sh
 
-# .gitkeep pour dossiers vides
+# .gitkeep for empty directories
 git add output/.gitkeep downloads/.gitkeep uploads/.gitkeep
 ```
 
 ---
 
-## 🔄 Maintenance régulière
+## Regular Maintenance
 
-### Nettoyage hebdomadaire
+### Weekly Cleanup
 ```bash
-# Supprimer les vidéos téléchargées
+# Delete downloaded videos
 rm -rf downloads/*
 touch downloads/.gitkeep
 
-# Supprimer les clips générés
+# Delete generated clips
 rm -rf output/*
 touch output/.gitkeep
 
-# Supprimer les uploads
+# Delete uploads
 rm -rf uploads/*
 touch uploads/.gitkeep
 
-# Nettoyer le cache Python
+# Clean Python cache
 find . -name "__pycache__" -type d -exec rm -rf {} +
 find . -name "*.pyc" -delete
 
-# Nettoyer .DS_Store
+# Clean .DS_Store
 find . -name ".DS_Store" -delete
 ```
 
-### Vérification de la structure
+### Structure Verification
 ```bash
-# Afficher l'arborescence
+# Display tree
 tree -L 2 -I ".venv|__pycache__|*.pyc|.DS_Store"
 
-# Vérifier les tailles
+# Check sizes
 du -sh src/ tests/ web/ models/
 du -sh output/ downloads/ uploads/
 ```
 
 ---
 
-## 📞 Support
+## Support
 
-- **Issues** : GitHub Issues
-- **Documentation** : README.md
-- **Architecture** : STRUCTURE.md
-- **Organisation** : WORKSPACE.md (ce fichier)
-- **Agents IA** : AGENTS.md
+- **Issues**: GitHub Issues
+- **Documentation**: README.md
+- **Architecture**: STRUCTURE.md
+- **Organization**: WORKSPACE.md (this file)
+- **AI Agents**: AGENTS.md
 
 ---
 
-**Dernière organisation** : 25 janvier 2026  
-**Status** : ✅ Workspace ultra-propre et organisé  
-**Prêt pour commit** : ✅ OUI
+**Last organized**: January 25, 2026
+**Status**: Workspace clean and organized
+**Ready to commit**: Yes

@@ -349,7 +349,12 @@ class Api:
         if not self._window or not webview:
             return None
 
-        file_types = ('Fichiers vidéo (*.mp4;*.mov;*.avi;*.mkv;*.webm)',)
+        import locale
+        lang = locale.getdefaultlocale()[0] or ''
+        if lang.startswith('fr'):
+            file_types = ('Fichiers vidéo (*.mp4;*.mov;*.avi;*.mkv;*.webm)',)
+        else:
+            file_types = ('Video files (*.mp4;*.mov;*.avi;*.mkv;*.webm)',)
         result = self._window.create_file_dialog(
             dialog_type=webview.OPEN_DIALOG,
             allow_multiple=False,

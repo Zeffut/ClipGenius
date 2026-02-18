@@ -1,93 +1,93 @@
-# Changelog ClipGenius
+# ClipGenius Changelog
 
-Toutes les modifications notables de ce projet seront documentées ici.
+All notable changes to this project will be documented here.
 
-Format basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
-et ce projet suit le [Semantic Versioning](https://semver.org/lang/fr/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [beta] - 2026-01-22
 
-### 🎉 Refonte Majeure - Interface Web Native
+### Major Overhaul — Native Web Interface
 
-#### Ajouté
-- **Interface web native** avec PyWebView (remplace CLI)
-- **4 Presets intelligents** : Podcast, Gaming, Vlog, Tutoriel
-- **Détection automatique de preset** basée sur ~670 mots-clés
-- **Preset Tutoriel** avec 270 mots-clés (code, design, DIY, musique, etc.)
-- **UI moderne** avec design gradient violet/bleu
-- **Verrouillage UI** pendant traitement (évite erreurs utilisateur)
-- **EventSource streaming** pour suivi temps réel
-- **Reconnexion automatique** aux jobs en cours
-- **Validation YouTube** avec debounce 500ms
-- **Optimisations macOS** : App Nap, caffeinate, CPU priority (2.3x plus rapide)
-- **Support fichiers locaux** via drag & drop
-- **Mini-player vidéo** avec preview avant génération
-- **Gestion d'état localStorage** pour persistance
+#### Added
+- **Native web interface** with PyWebView (replaces CLI)
+- **4 smart presets**: Podcast, Gaming, Vlog, Tutorial
+- **Automatic preset detection** based on ~670 keywords
+- **Tutorial preset** with 270 keywords (code, design, DIY, music, etc.)
+- **Modern UI** with purple/blue gradient design
+- **UI lock** during processing (prevents user errors)
+- **EventSource streaming** for real-time progress tracking
+- **Automatic reconnection** to ongoing jobs
+- **YouTube URL validation** with 500ms debounce
+- **macOS optimizations**: App Nap, caffeinate, CPU priority (2.3x faster)
+- **Local file support** via drag & drop
+- **Mini video player** with preview before generation
+- **localStorage state management** for persistence
 
-#### Modifié
-- **Presets sur une ligne** au lieu de 2-3 (gain de place vertical)
-- **Filtres simplifiés** : Supprimé qualité vidéo, score viral, modèle Whisper
-- **Valeurs optimales hardcodées** : 1080p, score 0.75, Whisper turbo
-- **Détection preset améliorée** : Favorise presets spécifiques sur vlog générique
-- **Vocabulaire massif** : Gaming 350+ mots, Vlog 200+, Podcast 170+
-- **README.md complet** avec nouvelle documentation
+#### Changed
+- **Single-line presets** instead of 2–3 rows (saves vertical space)
+- **Simplified filters**: Removed video quality, viral score, Whisper model
+- **Optimal values hardcoded**: 1080p, score 0.75, Whisper turbo
+- **Improved preset detection**: Favors specific presets over generic vlog
+- **Massive vocabulary**: Gaming 350+ words, Vlog 200+, Podcast 170+
+- **Complete README.md** with updated documentation
 
-#### Supprimé
-- **main.py** (CLI obsolète, remplacé par interface web)
-- **test_simple.html** (fichier de test temporaire)
-- **FILTERS_REDESIGN.md** (doc de travail temporaire)
-- **PERFORMANCE_OPTIMIZATION.md** (doc de travail temporaire)
-- **Fichiers cache** : `__pycache__`, `.cache`, `.DS_Store`
-- **Vidéos temporaires** dans downloads/ et uploads/
-- **Popup notification performance** (optimisations macOS suffisantes)
+#### Removed
+- **main.py** (obsolete CLI, replaced by web interface)
+- **test_simple.html** (temporary test file)
+- **FILTERS_REDESIGN.md** (temporary working doc)
+- **PERFORMANCE_OPTIMIZATION.md** (temporary working doc)
+- **Cache files**: `__pycache__`, `.cache`, `.DS_Store`
+- **Temporary videos** in downloads/ and uploads/
+- **Performance notification popup** (macOS optimizations suffice)
 
-**Note** : `web_app.py` est CONSERVÉ - c'est le serveur Flask nécessaire au fonctionnement de l'application !
+**Note**: `web_app.py` is KEPT — it is the Flask server required for the application to run!
 
-#### Nettoyage & Organisation
-- **Structure repo optimisée** : Fichiers bien organisés
-- **Documentation complète** : README, AGENTS, STRUCTURE, CHANGELOG
-- **.gitattributes** pour gestion EOL et binaires
-- **.gitkeep** pour dossiers temporaires vides
-- **Dossiers nettoyés** : output/, downloads/, uploads/ vidés
+#### Cleanup & Organization
+- **Optimized repo structure**: Well-organized files
+- **Complete documentation**: README, AGENTS, STRUCTURE, CHANGELOG
+- **.gitattributes** for EOL and binary handling
+- **.gitkeep** for empty temporary directories
+- **Cleaned directories**: output/, downloads/, uploads/ emptied
 
-### 🐛 Corrections
-- **Hauteur inputs cohérente** : Select dropdowns alignés avec autres inputs
-- **Bouton "Suivant" désactivé** pendant validation URL YouTube
-- **Détection preset heuristique** : Tutoriel détecté en priorité
-- **Performance background** : Traitement vidéo non ralenti par UI
+### Bug Fixes
+- **Consistent input height**: Select dropdowns aligned with other inputs
+- **"Next" button disabled** during YouTube URL validation
+- **Heuristic preset detection**: Tutorial detected as priority
+- **Background performance**: Video processing not slowed by UI
 
-### 📊 Statistiques
-- **~14,500 lignes** de code Python
-- **~4,500 lignes** HTML/CSS/JavaScript
-- **16 modules** dans src/
-- **4 presets** avec détection intelligente
-- **~670 mots-clés** de détection totaux
+### Statistics
+- **~14,500 lines** of Python code
+- **~4,500 lines** of HTML/CSS/JavaScript
+- **16 modules** in src/
+- **4 presets** with smart detection
+- **~670 keywords** total for detection
 
 ---
 
 ## [1.0.0] - 2024-12-14
 
-### Version Initiale - CLI
+### Initial Release — CLI
 
-#### Ajouté
-- **CLI avec Click** pour génération de clips
-- **Analyse IA locale** avec Phi-4-mini (100% offline)
-- **Fallback audio/video** si LLM indisponible
-- **Recadrage intelligent** avec MediaPipe
-- **Sous-titres Whisper** avec transcription auto
-- **Sous-titres enrichis** style TikTok avec emojis
-- **Hook optimizer** pour 3 premières secondes
-- **Durées adaptatives** selon plateforme
-- **Audio overlay** avec musique de fond
-- **Thumbnail generator** pour miniatures
-- **Smart cropper** avec blur-fill
-- **Presets** : Podcast, Gaming, Vlog
+#### Added
+- **CLI with Click** for clip generation
+- **Local AI analysis** with Phi-4-mini (100% offline)
+- **Audio/video fallback** when LLM is unavailable
+- **Smart cropping** with MediaPipe
+- **Whisper subtitles** with automatic transcription
+- **Enriched subtitles** TikTok-style with emojis
+- **Hook optimizer** for the first 3 seconds
+- **Adaptive durations** per platform
+- **Audio overlay** with background music
+- **Thumbnail generator** for thumbnails
+- **Smart cropper** with blur-fill
+- **Presets**: Podcast, Gaming, Vlog
 
-#### Structure Initiale
+#### Initial Structure
 ```
 ClipGenius/
-├── main.py              # CLI principal
-├── src/                 # 16 modules Python
+├── main.py              # Main CLI
+├── src/                 # 16 Python modules
 ├── tests/               # 4 tests
 ├── requirements.txt
 └── README.md
@@ -95,23 +95,23 @@ ClipGenius/
 
 ---
 
-## Format des Versions
+## Version Format
 
 **MAJOR.MINOR.PATCH**
 
-- **MAJOR** : Changements incompatibles avec versions précédentes
-- **MINOR** : Nouvelles fonctionnalités rétrocompatibles
-- **PATCH** : Corrections de bugs rétrocompatibles
+- **MAJOR**: Breaking changes incompatible with previous versions
+- **MINOR**: New backwards-compatible features
+- **PATCH**: Backwards-compatible bug fixes
 
-### Types de Changements
+### Change Types
 
-- **Ajouté** : Nouvelles fonctionnalités
-- **Modifié** : Changements sur fonctionnalités existantes
-- **Déprécié** : Fonctionnalités bientôt supprimées
-- **Supprimé** : Fonctionnalités supprimées
-- **Corrigé** : Corrections de bugs
-- **Sécurité** : Vulnérabilités corrigées
+- **Added**: New features
+- **Changed**: Changes to existing features
+- **Deprecated**: Features to be removed in a future release
+- **Removed**: Features removed
+- **Fixed**: Bug fixes
+- **Security**: Vulnerability fixes
 
 ---
 
-**Projet maintenu par ClipGenius Team**
+**Maintained by ClipGenius Team**
