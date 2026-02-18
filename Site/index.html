@@ -75,17 +75,23 @@
 
                 <div class="hero-stats reveal" data-delay="380">
                     <div class="stat">
-                        <span class="stat-num mono" data-count="96">96</span><span class="stat-suf mono">%</span>
+                        <div class="stat-row">
+                            <span class="stat-num mono" data-count="96">96</span><span class="stat-suf mono">%</span>
+                        </div>
                         <span class="stat-label">Time saved</span>
                     </div>
                     <div class="stat-sep" aria-hidden="true"></div>
                     <div class="stat">
-                        <span class="stat-num mono">∞</span>
+                        <div class="stat-row">
+                            <span class="stat-num mono">∞</span>
+                        </div>
                         <span class="stat-label">Free, forever</span>
                     </div>
                     <div class="stat-sep" aria-hidden="true"></div>
                     <div class="stat">
-                        <span class="stat-num mono">0</span>
+                        <div class="stat-row">
+                            <span class="stat-num mono">0</span>
+                        </div>
                         <span class="stat-label">Data uploaded</span>
                     </div>
                 </div>
@@ -232,6 +238,7 @@
     <!-- ── TICKER ── -->
     <div class="ticker-wrap" aria-hidden="true">
         <div class="ticker-track">
+            <!-- Two identical copies for seamless CSS-only loop -->
             <div class="ticker-inner">
                 <span>🎙️ Podcasts</span><span class="tick-sep">·</span>
                 <span>🎮 Gaming</span><span class="tick-sep">·</span>
@@ -240,6 +247,8 @@
                 <span>🎤 Interviews</span><span class="tick-sep">·</span>
                 <span>🎬 Films</span><span class="tick-sep">·</span>
                 <span>💼 Business</span><span class="tick-sep">·</span>
+            </div>
+            <div class="ticker-inner" aria-hidden="true">
                 <span>🎙️ Podcasts</span><span class="tick-sep">·</span>
                 <span>🎮 Gaming</span><span class="tick-sep">·</span>
                 <span>📹 Vlogs</span><span class="tick-sep">·</span>
@@ -328,7 +337,7 @@
                         <div class="compare-badge good" aria-hidden="true">✓</div>
                         <div>
                             <h3>With ClipGenius</h3>
-                            <div class="compare-time good-time">5–10 minutes / video</div>
+                            <div class="compare-time good-time">15–20 minutes / video</div>
                         </div>
                     </div>
                     <ul class="compare-list">

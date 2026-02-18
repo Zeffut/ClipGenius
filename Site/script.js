@@ -141,14 +141,6 @@ if (scrollHint) {
     window.addEventListener('scroll', hideHint, { passive: true, once: true });
 }
 
-/* ── Seamless ticker (clone for loop) ── */
-const tickerInner = document.querySelector('.ticker-inner');
-if (tickerInner) {
-    const clone = tickerInner.cloneNode(true);
-    clone.setAttribute('aria-hidden', 'true');
-    tickerInner.parentNode.appendChild(clone);
-}
-
 /* ── Accessibility: external links ── */
 document.querySelectorAll('a[target="_blank"]').forEach(link => {
     if (!link.hasAttribute('rel')) link.setAttribute('rel', 'noopener noreferrer');
