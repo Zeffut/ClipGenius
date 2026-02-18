@@ -740,7 +740,7 @@ h1, h2, h3 { font-family: 'Syne', sans-serif; }
     border: 1px solid rgba(78,201,176,.25);
     backdrop-filter: blur(8px);
     white-space: nowrap;
-    animation: float 4.5s ease-in-out .8s infinite;
+    animation: floatCentered 4.5s ease-in-out .8s infinite;
     box-shadow: 0 0 20px rgba(78,201,176,.1);
 }
 .fc-done-title {
@@ -1273,6 +1273,10 @@ h1, h2, h3 { font-family: 'Syne', sans-serif; }
 @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50%       { transform: translateY(-10px); }
+}
+@keyframes floatCentered {
+    0%, 100% { transform: translateX(-50%) translateY(0px); }
+    50%       { transform: translateX(-50%) translateY(-10px); }
 }
 @keyframes scrollPulse {
     0%, 100% { opacity: .4; transform: scaleY(1); }
