@@ -34,12 +34,13 @@ openai-whisper==20231117
 llama-cpp-python>=0.3.0
 
 # =============================================================================
-# AI - Audio analysis avancée (optionnel, pipeline v2)
+# AI - Audio analysis avancée (pipeline v2)
 # =============================================================================
 # Diarisation des locuteurs (identification qui parle quand)
-# pyannote.audio>=3.1  # Optionnel: pip install pyannote.audio
+pyannote.audio>=3.1
 # Reconnaissance d'emotions vocales
-# speechbrain>=1.0     # Optionnel: pip install speechbrain torchaudio
+speechbrain>=1.0
+torchaudio>=2.3.0
 
 # =============================================================================
 # Subtitles (ASS/SSA format)

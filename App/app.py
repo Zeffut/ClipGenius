@@ -583,11 +583,59 @@ def run_main_app():
         flask_app.run(host=SERVER_HOST, port=SERVER_PORT, debug=False, threaded=True, use_reloader=False)
 
 
+def ensure_dependencies():
+    """
+    Auto-installe les dépendances depuis requirements.txt.
+
+    Utilise un hash MD5 pour détecter les changements : l'installation
+    ne se relance que si requirements.txt a été modifié depuis la dernière fois.
+    Le fichier .deps_hash (ignoré par git) stocke le hash de la dernière installation.
+    """
+    import hashlib
+
+    req_file = Path(__file__).parent / 'requirements.txt'
+    hash_file = Path(__file__).parent / '.deps_hash'
+
+    if not req_file.exists():
+        return
+
+    current_hash = hashlib.md5(req_file.read_bytes()).hexdigest()
+
+    # Déjà installé avec ce requirements.txt exact → rien à faire
+    if hash_file.exists() and hash_file.read_text().strip() == current_hash:
+        return
+
+    print("📦 Installation des dépendances (première utilisation ou mise à jour)...")
+    print("   Cela peut prendre quelques minutes.\n")
+
+    # Mettre à jour pip/setuptools/wheel en premier (évite les erreurs de build)
+    subprocess.run(
+        [sys.executable, '-m', 'pip', 'install', '--upgrade', '--quiet',
+         'pip', 'setuptools', 'wheel'],
+        capture_output=False,
+    )
+
+    result = subprocess.run(
+        [sys.executable, '-m', 'pip', 'install', '-r', str(req_file), '--quiet', '--upgrade'],
+        capture_output=False,
+    )
+
+    if result.returncode == 0:
+        hash_file.write_text(current_hash)
+        print("\n✅ Dépendances installées avec succès!\n")
+    else:
+        print("\n⚠️  Certaines dépendances n'ont pas pu être installées. "
+              "L'application continue avec ce qui est disponible.\n")
+
+
 def main():
     """Point d'entrée principal"""
     print("\n" + "="*50)
     print("  ClipGenius beta")
     print("="*50 + "\n")
+
+    # Auto-installer les dépendances si nécessaire
+    ensure_dependencies()
 
     # Vérifier/télécharger le modèle AI au premier démarrage
     model_path = find_phi3_model()

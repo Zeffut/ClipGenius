@@ -62,6 +62,7 @@ App/models/*.onnx
 .cache/
 .transcription_cache/
 .pytest_cache/
+App/.deps_hash
 
 # =============================================================================
 # Secrets & Config locale

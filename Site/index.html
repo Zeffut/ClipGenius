@@ -12,8 +12,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <!-- Rybbit Tracking -->
-    <script src="https://tracking.zeffut.fr/api/script.js" data-site-id="7b94ee2e15ae" defer></script>
+    <script src="https://tracking.zeffut.fr/api/script.js" data-site-id="5ea87e88cf14" defer></script>
     <link rel="stylesheet" href="styles.css">
+    <!-- Anti-FOUC : applique le thème avant le premier rendu -->
+    <script>
+        (function () {
+            var t = localStorage.getItem('cg-theme');
+            if (t) document.documentElement.dataset.theme = t;
+            else if (window.matchMedia('(prefers-color-scheme: light)').matches)
+                document.documentElement.dataset.theme = 'light';
+        })();
+    </script>
 </head>
 <body>
 
@@ -22,13 +31,23 @@
     <!-- ── NAV ── -->
     <nav class="navbar" id="navbar">
         <div class="nav-inner">
-            <a href="#" class="logo">
-                <span class="logo-mark">CG</span>
-                ClipGenius
-            </a>
+            <a href="#" class="logo">ClipGenius</a>
             <div class="nav-links">
                 <a href="#how" class="nav-link">How it works</a>
                 <a href="#features" class="nav-link">Features</a>
+                <button class="nav-theme-toggle" id="themeToggle" aria-label="Toggle light / dark mode">
+                    <!-- Soleil : visible en mode sombre -->
+                    <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <!-- Lune : visible en mode clair -->
+                    <svg class="icon-moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
                 <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="nav-cta">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
                     GitHub
@@ -366,7 +385,6 @@
                     <div class="bento-icon" aria-hidden="true">🔒</div>
                     <h3>100% Private</h3>
                     <p>Everything runs on your machine. Your videos never leave your hard drive. No accounts, no cloud uploads, no surveillance.</p>
-                    <div class="bento-tag mono">Local AI</div>
                 </div>
 
                 <div class="bento-card b-sm reveal" data-delay="50">
@@ -381,23 +399,16 @@
                     <p>Multi-signal detection: audio peaks, speech patterns, structural cues.</p>
                 </div>
 
-                <div class="bento-card b-wide reveal" data-delay="150">
+                <div class="bento-card b-sm reveal" data-delay="150">
                     <div class="bento-icon" aria-hidden="true">📝</div>
                     <h3>Smart Captions</h3>
-                    <p>TikTok-style animated subtitles, synced to the millisecond, with emojis.</p>
+                    <p>TikTok-style animated subtitles, word by word, synced to the millisecond. Emojis included.</p>
                 </div>
 
-                <div class="bento-card b-sm reveal" data-delay="200">
-                    <div class="bento-icon" aria-hidden="true">🎬</div>
-                    <h3>Platform Ready</h3>
-                    <p>Perfect 9:16 ratio, right resolution, right length for every platform.</p>
-                </div>
-
-                <div class="bento-card b-free reveal" data-delay="250">
+                <div class="bento-card b-free reveal" data-delay="200">
                     <div class="bento-icon" aria-hidden="true">💰</div>
                     <h3>Free &amp; Open Source — Always</h3>
                     <p>No subscription. No usage limits. No "pro plan." Clone it, fork it, deploy it. The code is yours.</p>
-                    <a href="https://github.com/Zeffut/ClipGenius" target="_blank" rel="noopener noreferrer" class="bento-link">View on GitHub →</a>
                 </div>
             </div>
         </div>
@@ -470,10 +481,7 @@
     <footer class="footer">
         <div class="container footer-inner">
             <div class="footer-brand">
-                <a href="#" class="logo">
-                    <span class="logo-mark">CG</span>
-                    ClipGenius
-                </a>
+                <a href="#" class="logo">ClipGenius</a>
                 <p>Open source. Privacy first. Forever free.</p>
             </div>
             <div class="footer-links">

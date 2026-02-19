@@ -32,7 +32,7 @@ console = Console()
 
 MAX_RETRIES: int = 3
 CHAPTER_MAX_TOKENS: int = 1500
-SCORING_MAX_TOKENS: int = 1200
+SCORING_MAX_TOKENS: int = 1600
 BOUNDARY_MAX_TOKENS: int = 800
 DEFAULT_TEMPERATURE: float = 0.3
 CHATML_STOP: List[str] = ['<|im_end|>', '<|endoftext|>']
@@ -528,6 +528,20 @@ class LLMAnalyzer:
         if recovered:
             return recovered
 
+        # Strategie 6 : JSON tronque par la limite de tokens
+        # Chercher depuis le premier '[' et fermer les structures ouvertes
+        array_start = text.find('[')
+        if array_start != -1:
+            candidate = self._close_truncated_json(
+                self._repair_json(text[array_start:])
+            )
+            try:
+                result = json.loads(candidate)
+                if isinstance(result, list):
+                    return result
+            except (json.JSONDecodeError, ValueError):
+                pass
+
         logger.warning('Impossible d\'extraire du JSON de la reponse LLM')
         return None
 
@@ -595,6 +609,46 @@ class LLMAnalyzer:
                 current_obj += char
 
         return objects if objects else None
+
+    @staticmethod
+    def _close_truncated_json(text: str) -> str:
+        """Ferme les structures JSON non terminees (tronquees par la limite de tokens).
+
+        Parcourt le texte en tenant compte des chaines de caracteres pour
+        compter les accolades et crochets ouverts, puis ajoute les fermetures
+        manquantes.
+        """
+        depth_brace = 0
+        depth_bracket = 0
+        in_string = False
+        i = 0
+
+        while i < len(text):
+            char = text[i]
+            if in_string:
+                if char == '\\':
+                    i += 2  # Skip escaped character
+                    continue
+                if char == '"':
+                    in_string = False
+            else:
+                if char == '"':
+                    in_string = True
+                elif char == '{':
+                    depth_brace += 1
+                elif char == '}':
+                    depth_brace = max(0, depth_brace - 1)
+                elif char == '[':
+                    depth_bracket += 1
+                elif char == ']':
+                    depth_bracket = max(0, depth_bracket - 1)
+            i += 1
+
+        stripped = text.rstrip()
+        if stripped.endswith(','):
+            stripped = stripped[:-1]
+
+        return stripped + '}' * depth_brace + ']' * depth_bracket
 
     # ===================================================================
     # Construction de la transcription formatee
@@ -878,7 +932,7 @@ class LLMAnalyzer:
                 f'Transcription du chapitre :\n{transcript}\n\n'
                 f'Trouve les 1 a 2 meilleurs moments viraux '
                 f'(duree : {min_duration:.0f}-{max_duration:.0f} secondes).\n\n'
-                'Pour chaque moment, raisonne d\'abord, puis donne tes scores.\n\n'
+                'Mets ton raisonnement dans le champ "reasoning" de chaque objet JSON.\n\n'
                 'Format JSON attendu :\n'
                 '[{\n'
                 '  "start": 15, "end": 65,\n'
@@ -902,7 +956,7 @@ class LLMAnalyzer:
                 f'Chapter transcript:\n{transcript}\n\n'
                 f'Find the 1-2 best viral moments '
                 f'(duration: {min_duration:.0f}-{max_duration:.0f} seconds).\n\n'
-                'For each moment, reason first, then give your scores.\n\n'
+                'Put your reasoning inside the "reasoning" field of each JSON object.\n\n'
                 'Expected JSON format:\n'
                 '[{\n'
                 '  "start": 15, "end": 65,\n'

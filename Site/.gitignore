@@ -29,3 +29,6 @@ npm-debug.log*
 
 # Node modules (if ever needed)
 node_modules/
+
+# AI
+.claude/

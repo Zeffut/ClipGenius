@@ -141,6 +141,17 @@ if (scrollHint) {
     window.addEventListener('scroll', hideHint, { passive: true, once: true });
 }
 
+/* ── Theme toggle ── */
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        const html = document.documentElement;
+        const next = html.dataset.theme === 'light' ? 'dark' : 'light';
+        html.dataset.theme = next;
+        localStorage.setItem('cg-theme', next);
+    });
+}
+
 /* ── Accessibility: external links ── */
 document.querySelectorAll('a[target="_blank"]').forEach(link => {
     if (!link.hasAttribute('rel')) link.setAttribute('rel', 'noopener noreferrer');
