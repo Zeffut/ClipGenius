@@ -158,7 +158,30 @@ class PreTranscribedAudioTranscriber:
         Args:
             words: Liste de mots avec leurs timestamps (relatifs au clip, pas à la vidéo originale)
         """
-        self.words = words
+        self.words = self._merge_contractions(words)
+
+    @staticmethod
+    def _merge_contractions(words: List[WordTimestamp]) -> List[WordTimestamp]:
+        """Fusionne les contractions françaises pour éviter les coupures.
+        Ex: ['L'', 'application'] → ['L'application']
+        """
+        import copy
+        merged: List[WordTimestamp] = []
+        i = 0
+        while i < len(words):
+            w = words[i]
+            text = (w.word or '').rstrip()
+            if (text.endswith("'") or text.endswith('\u2019')) and i + 1 < len(words):
+                nw = words[i + 1]
+                m = copy.copy(w)
+                m.word = text + (nw.word or '').lstrip()
+                m.end = nw.end
+                merged.append(m)
+                i += 2
+            else:
+                merged.append(w)
+                i += 1
+        return merged
 
     def transcribe(self, audio_path: str) -> 'Document':
         """

@@ -73,5 +73,5 @@ psutil==6.1.0  # Détection RAM pour optimisation dynamique
 # Application Mac native
 # =============================================================================
 pywebview==5.1
-pyobjc-framework-Cocoa==10.3.1; sys_platform == 'darwin'
-pyobjc-framework-WebKit==10.3.1; sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=12.1; sys_platform == 'darwin'
+pyobjc-framework-WebKit>=12.1; sys_platform == 'darwin'

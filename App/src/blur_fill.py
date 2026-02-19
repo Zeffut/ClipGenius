@@ -173,6 +173,86 @@ def create_blur_filled_frame(
     return result
 
 
+def create_letterbox_frame(
+    frame: np.ndarray,
+    target_width: int,
+    target_height: int,
+    blur_strength: int = 61,
+    darken_factor: float = 0.40,
+) -> np.ndarray:
+    """Affiche la frame source en letterbox centré avec fond flouté haut/bas.
+
+    Utilisé quand aucun visage n'est détecté : on montre la totalité de la
+    largeur source (scalée à target_width) centrée verticalement, et on
+    remplit les barres haut/bas avec une version fortement floutée et
+    assombrie de la même frame.
+
+    Args:
+        frame:          Frame source BGR
+        target_width:   Largeur cible (ex: 1080)
+        target_height:  Hauteur cible (ex: 1920)
+        blur_strength:  Taille du kernel gaussien (doit être impair)
+        darken_factor:  Assombrissement du fond (0.40 = 60 % luminosité)
+
+    Returns:
+        Frame composite target_width × target_height
+    """
+    h, w = frame.shape[:2]
+    if h == 0 or w == 0:
+        return np.zeros((target_height, target_width, 3), dtype=np.uint8)
+
+    interpolation = cv2.INTER_LANCZOS4
+
+    # --- Contenu : ajuster la largeur à target_width ---
+    scale = target_width / w
+    content_h = int(h * scale)
+    content = cv2.resize(frame, (target_width, content_h), interpolation=interpolation)
+
+    if content_h >= target_height:
+        # La vidéo est déjà plus haute que cible (rare) : recadrer au centre
+        y0 = (content_h - target_height) // 2
+        return content[y0:y0 + target_height, :]
+
+    # --- Fond : scale to fill target_height, center-crop width ---
+    bg_scale = target_height / h
+    bg_w = int(w * bg_scale)
+    bg = cv2.resize(frame, (bg_w, target_height), interpolation=cv2.INTER_LINEAR)
+    if bg_w > target_width:
+        bx = (bg_w - target_width) // 2
+        bg = bg[:, bx:bx + target_width]
+    elif bg_w < target_width:
+        pad = target_width - bg_w
+        bg = cv2.copyMakeBorder(bg, 0, 0, pad // 2, pad - pad // 2, cv2.BORDER_REFLECT)
+
+    # Flou gaussien lourd + assombrissement
+    ks = blur_strength if blur_strength % 2 == 1 else blur_strength + 1
+    bg = cv2.GaussianBlur(bg, (ks, ks), 0)
+    bg = (bg.astype(np.float32) * (1.0 - darken_factor)).clip(0, 255).astype(np.uint8)
+
+    # --- Composite : coller le contenu centré sur le fond ---
+    y_off = (target_height - content_h) // 2
+    result = bg.copy()
+    result[y_off:y_off + content_h, :] = content
+
+    # Dégradé de transition haut/bas pour une fusion naturelle
+    fade_h = min(40, content_h // 8, y_off) if y_off > 0 else 0
+    if fade_h > 2:
+        for row in range(fade_h):
+            alpha = row / fade_h
+            top_row = y_off + row
+            bot_row = y_off + content_h - 1 - row
+            result[top_row] = (
+                content[row].astype(np.float32) * alpha
+                + bg[top_row].astype(np.float32) * (1.0 - alpha)
+            ).clip(0, 255).astype(np.uint8)
+            result[bot_row] = (
+                content[content_h - 1 - row].astype(np.float32) * alpha
+                + bg[bot_row].astype(np.float32) * (1.0 - alpha)
+            ).clip(0, 255).astype(np.uint8)
+
+    return result
+
+
 def create_vignette_mask(width: int, height: int, strength: float = 0.5) -> np.ndarray:
     """
     Crée un masque de vignette pour assombrir les bords.

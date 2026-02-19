@@ -20,6 +20,7 @@ from .smart_cropper import (
     SmartCropper, FocusPoint, CropResult, create_blur_filled_frame,
     AdaptiveCropManager, ContentType
 )
+from .blur_fill import create_letterbox_frame
 from .visual_effects import apply_color_grading, apply_sharpening
 from .audio_sanitizer import sanitize_audio
 from .clip_encoder import encode_single_clip, IS_MACOS
@@ -114,6 +115,8 @@ class ClipConfig:
     # Blur fill pour les visages trop bas
     enable_blur_fill: bool = True
     blur_strength: int = 51  # Force du flou (doit être impair)
+    # Seuil de confiance en dessous duquel on utilise le letterbox (fond flouté symétrique)
+    letterbox_confidence_threshold: float = 0.25
 
     # Recadrage intelligent (désactiver pour accélérer)
     smart_crop: bool = True  # False = crop centré simple
@@ -635,6 +638,16 @@ class ClipGenerator:
         else:
             # Ancien système
             focus = self.cropper.get_interpolated_focus(focus_points, timestamp)
+
+        # Pas de visage détecté → letterbox avec fond flouté symétrique haut/bas
+        if (self.config.enable_blur_fill
+                and focus.confidence < self.config.letterbox_confidence_threshold):
+            return create_letterbox_frame(
+                frame,
+                target_width=self.config.output_width,
+                target_height=self.config.output_height,
+                blur_strength=self.config.blur_strength,
+            )
 
         # Calculer la région de recadrage avec détection du besoin de blur fill
         crop_result = self.cropper.calculate_crop_region_extended(

@@ -334,8 +334,8 @@ class EnrichedSubtitleProcessor:
     font-weight: 800;
     text-shadow: {base_shadow}
     letter-spacing: {self.style.letter_spacing}px;
-    padding: 0 8px;
-    line-height: 1.35;
+    padding: 4px 10px 10px 10px;
+    line-height: 1.5;
     text-transform: {self.style.text_transform};
     transition: all 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: inline-block;

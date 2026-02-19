@@ -32,7 +32,7 @@ console = Console()
 
 MAX_RETRIES: int = 3
 CHAPTER_MAX_TOKENS: int = 1500
-SCORING_MAX_TOKENS: int = 1600
+SCORING_MAX_TOKENS: int = 2400
 BOUNDARY_MAX_TOKENS: int = 800
 DEFAULT_TEMPERATURE: float = 0.3
 CHATML_STOP: List[str] = ['<|im_end|>', '<|endoftext|>']
@@ -1225,7 +1225,7 @@ class LLMAnalyzer:
             start = max(chapter.start - 5.0, start)
             end = min(chapter.end + 5.0, end)
 
-            # Extraire les scores
+            # Extraire les scores (nested "scores" object ou top-level)
             scores_raw = item.get('scores', {})
             if not isinstance(scores_raw, dict):
                 scores_raw = {}
@@ -1233,7 +1233,8 @@ class LLMAnalyzer:
             # Normaliser les scores de 1-10 vers 0-1
             normalized_scores: Dict[str, float] = {}
             for dim in score_dimensions:
-                raw_score = scores_raw.get(dim, 5)
+                # Priorite : scores_raw (nested) > top-level > defaut 5
+                raw_score = scores_raw.get(dim, item.get(dim, 5))
                 try:
                     raw_score = float(raw_score)
                 except (TypeError, ValueError):

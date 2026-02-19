@@ -226,6 +226,27 @@ def generate_tiktok_ass(
             for w in words
         ]
 
+    # Fusionner les contractions françaises avant de grouper
+    # "L'" + "application" → "L'application" (1 mot au lieu de 2)
+    import copy
+    merged_words = []
+    i = 0
+    while i < len(enriched_words):
+        w = enriched_words[i]
+        text = (w.word or '').rstrip()
+        # Apostrophe droite (') ou typographique (')
+        if (text.endswith("'") or text.endswith('\u2019')) and i + 1 < len(enriched_words):
+            nw = enriched_words[i + 1]
+            merged = copy.copy(w)
+            merged.word = text + (nw.word or '').lstrip()
+            merged.end = nw.end
+            merged_words.append(merged)
+            i += 2
+        else:
+            merged_words.append(w)
+            i += 1
+    enriched_words = merged_words
+
     # Grouper les mots en segments (max_words mots par segment)
     segments = []
     current_segment = []

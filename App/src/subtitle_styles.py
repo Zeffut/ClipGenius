@@ -30,8 +30,8 @@ VIRAL_CSS = """
         4px 4px 8px rgba(0, 0, 0, 0.5),
         0px 6px 12px rgba(0, 0, 0, 0.3);
     letter-spacing: 0.5px;
-    padding: 0 6px;
-    line-height: 1.3;
+    padding: 4px 8px 10px 8px;
+    line-height: 1.5;
     text-transform: uppercase;
 }
 

@@ -12,6 +12,10 @@ import os
 
 # Supprimer TOUS les warnings avant tout import
 os.environ["PYTHONWARNINGS"] = "ignore"
+# Silence MediaPipe/Abseil C++ threads (GLOG_minloglevel=3 = FATAL uniquement)
+os.environ.setdefault("GLOG_minloglevel", "3")
+os.environ.setdefault("GLOG_logtostderr", "0")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -591,7 +595,7 @@ def ensure_dependencies():
     ne se relance que si requirements.txt a été modifié depuis la dernière fois.
     Le fichier .deps_hash (ignoré par git) stocke le hash de la dernière installation.
     """
-    import hashlib
+    import hashlib, os, tempfile
 
     req_file = Path(__file__).parent / 'requirements.txt'
     hash_file = Path(__file__).parent / '.deps_hash'
@@ -608,17 +612,34 @@ def ensure_dependencies():
     print("📦 Installation des dépendances (première utilisation ou mise à jour)...")
     print("   Cela peut prendre quelques minutes.\n")
 
-    # Mettre à jour pip/setuptools/wheel en premier (évite les erreurs de build)
+    # Pinning setuptools<75 : les versions récentes ont retiré pkg_resources,
+    # qui est requis par des packages legacy comme openai-whisper.
     subprocess.run(
-        [sys.executable, '-m', 'pip', 'install', '--upgrade', '--quiet',
-         'pip', 'setuptools', 'wheel'],
+        [sys.executable, '-m', 'pip', 'install', '--quiet',
+         'pip', 'setuptools<75', 'wheel'],
         capture_output=False,
     )
 
-    result = subprocess.run(
-        [sys.executable, '-m', 'pip', 'install', '-r', str(req_file), '--quiet', '--upgrade'],
-        capture_output=False,
-    )
+    # PIP_CONSTRAINT propage le pin aux environnements de build isolés que pip
+    # crée en interne : chaque sous-processus pip en hérite automatiquement.
+    constraints_content = 'setuptools<75\n'
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False,
+                                     prefix='cg_pip_') as f:
+        f.write(constraints_content)
+        constraints_file = f.name
+
+    env = os.environ.copy()
+    env['PIP_CONSTRAINT'] = constraints_file
+
+    try:
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', str(req_file),
+             '--quiet', '--upgrade'],
+            capture_output=False,
+            env=env,
+        )
+    finally:
+        os.unlink(constraints_file)
 
     if result.returncode == 0:
         hash_file.write_text(current_hash)

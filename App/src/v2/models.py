@@ -162,7 +162,7 @@ class PipelineConfig:
     max_clips: int = 5
     clips_per_minutes: float = 1/3  # 1 clip par 3 minutes
     # Seuils
-    min_viral_score: float = 0.65
+    min_viral_score: float = 0.45
     # Poids de fusion
     weight_llm: float = 0.40
     weight_audio: float = 0.30

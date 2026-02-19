@@ -10,9 +10,13 @@ from rich.console import Console
 
 console = Console()
 
-# Supprimer les warnings MediaPipe/Abseil AVANT tout import
-os.environ['GLOG_minloglevel'] = '2'  # Désactive les logs INFO et WARNING
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Désactive les warnings TensorFlow
+# Supprimer les logs MediaPipe/Abseil/TF AVANT tout import.
+# GLOG_minloglevel : 0=INFO 1=WARNING 2=ERROR 3=FATAL
+# GLOG_logtostderr=0 : coupe le flux stderr des threads C++ de MediaPipe
+os.environ.setdefault('GLOG_minloglevel', '3')
+os.environ.setdefault('GLOG_logtostderr', '0')
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+os.environ.setdefault('MEDIAPIPE_DISABLE_GPU', '0')  # laisser GPU actif mais silencieux
 
 # Variable globale pour le chemin temporaire MediaPipe
 _MP_TEMP_DIR = None

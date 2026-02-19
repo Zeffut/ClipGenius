@@ -119,7 +119,7 @@ class AudioOverlay:
 
             # Appliquer l'offset de début
             if start_offset > 0 and start_offset < music.duration:
-                music = music.subclipped(start_offset)
+                music = music.with_subclip(start_offset)
 
             # Boucler la musique si nécessaire
             if self.config.loop_music and music.duration < video_duration:
@@ -127,7 +127,7 @@ class AudioOverlay:
 
             # Couper la musique à la durée de la vidéo
             if music.duration > video_duration:
-                music = music.subclipped(0, video_duration)
+                music = music.with_subclip(0, video_duration)
 
             # Normaliser le volume si demandé
             if self.config.normalize_music:
@@ -192,12 +192,12 @@ class AudioOverlay:
         from moviepy import concatenate_audioclips
 
         loops_needed = int(np.ceil(target_duration / audio.duration))
-        clips = [audio.subclipped(0, audio.duration) for _ in range(loops_needed)]
+        clips = [audio.with_subclip(0, audio.duration) for _ in range(loops_needed)]
 
         looped = concatenate_audioclips(clips)
 
         # Couper à la durée exacte
-        return looped.subclipped(0, target_duration)
+        return looped.with_subclip(0, target_duration)
 
     def _normalize_audio(self, audio: AudioFileClip) -> AudioFileClip:
         """Normalise le volume de l'audio."""

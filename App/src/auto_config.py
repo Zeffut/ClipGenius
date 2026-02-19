@@ -246,7 +246,7 @@ class AutoConfigurator:
                 if video.audio:
                     # Extraire seulement la portion nécessaire
                     duration_to_extract = min(self.max_analysis_duration, video.duration)
-                    video.subclipped(0, duration_to_extract).audio.write_audiofile(
+                    video.with_subclip(0, duration_to_extract).audio.write_audiofile(
                         str(audio_path),
                         fps=11025,  # Sample rate réduit pour rapidité
                         logger=None

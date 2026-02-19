@@ -11,6 +11,8 @@ Analyse un fichier video/audio et retourne des AudioFeatures par segment :
 Fonctionne 100% hors-ligne sur macOS Apple Silicon.
 """
 
+import functools
+import inspect
 import warnings
 from pathlib import Path
 from typing import List, Optional
@@ -18,6 +20,33 @@ from typing import List, Optional
 import librosa
 import numpy as np
 from rich.console import Console
+
+# ---------------------------------------------------------------------------
+# Compatibility shim for huggingface_hub >= 0.24 which removed use_auth_token.
+# pyannote.audio and speechbrain still pass it internally; we remap it to
+# `token` so they keep working without requiring a downgrade.
+# Must run before any pyannote / speechbrain import.
+# ---------------------------------------------------------------------------
+def _patch_hf_hub() -> None:
+    try:
+        import huggingface_hub as _hf
+        _to_patch = ['hf_hub_download', 'snapshot_download']
+        for _name in _to_patch:
+            _fn = getattr(_hf, _name, None)
+            if _fn is None:
+                continue
+            if 'use_auth_token' in inspect.signature(_fn).parameters:
+                continue  # already supported, no patch needed
+            @functools.wraps(_fn)
+            def _compat(*args, _orig=_fn, **kw):
+                if 'use_auth_token' in kw:
+                    kw.setdefault('token', kw.pop('use_auth_token'))
+                return _orig(*args, **kw)
+            setattr(_hf, _name, _compat)
+    except Exception:
+        pass
+
+_patch_hf_hub()
 
 from .models import AudioFeatures, WordTimestamp
 

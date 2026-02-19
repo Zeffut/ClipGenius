@@ -65,7 +65,7 @@ def encode_single_clip(
 
     try:
         # Extraire le segment
-        subclip = video.subclipped(moment.start_time, moment.end_time)
+        subclip = video.with_subclip(moment.start_time, moment.end_time)
 
         if subclip.duration is None or subclip.duration <= 0:
             raise ValueError(f"Duree du subclip invalide: {subclip.duration}")
