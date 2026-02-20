@@ -785,14 +785,13 @@ h1, h2, h3 { font-family: 'Syne', sans-serif; }
 .ticker-track {
     display: flex;
     white-space: nowrap;
+    will-change: transform;
 }
 .ticker-inner {
     display: flex;
     gap: 2rem;
     padding-right: 2rem;
     flex-shrink: 0;
-    animation: ticker 28s linear infinite;
-    will-change: transform;
 }
 .ticker-inner span {
     font-size: .8rem;
@@ -1230,14 +1229,13 @@ h1, h2, h3 { font-family: 'Syne', sans-serif; }
     justify-content: center;
     width: 32px; height: 32px;
     border-radius: 6px;
-    border: 1px solid var(--border-2);
-    background: var(--surface-2);
+    border: none;
+    background: transparent;
     color: var(--text-2);
     flex-shrink: 0;
-    transition: border-color .2s, background .2s, color .2s;
+    transition: color .2s;
 }
 .nav-theme-toggle:hover {
-    border-color: rgba(0,122,204,.35);
     color: var(--text);
 }
 .nav-theme-toggle svg { pointer-events: none; }
@@ -1357,10 +1355,7 @@ h1, h2, h3 { font-family: 'Syne', sans-serif; }
     0%, 100% { opacity: .4; transform: scaleY(1); }
     50%       { opacity: .8; transform: scaleY(1.1); }
 }
-@keyframes ticker {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-100%); }
-}
+/* ticker animation driven by script.js */
 
 /* ════════════════════════════════════════
    RESPONSIVE

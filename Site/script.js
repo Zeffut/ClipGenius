@@ -152,7 +152,72 @@ if (themeToggle) {
     });
 }
 
+/* ── GitHub latest release → download buttons ── */
+(function () {
+    const REPO = 'Zeffut/ClipGenius';
+    const API  = `https://api.github.com/repos/${REPO}/releases/latest`;
+    const FALLBACK = `https://github.com/${REPO}/releases`;
+
+    const buttons = document.querySelectorAll('[data-download-btn]');
+    if (!buttons.length) return;
+
+    fetch(API)
+        .then(res => {
+            if (!res.ok) throw new Error('no release');
+            return res.json();
+        })
+        .then(release => {
+            const version = release.tag_name || '';
+            const asset   = release.assets && release.assets[0];
+            const url     = asset ? asset.browser_download_url : release.html_url;
+
+            buttons.forEach(btn => {
+                btn.href = url;
+                // Update label text (keep the inner SVG intact)
+                const textNode = [...btn.childNodes].find(n => n.nodeType === Node.TEXT_NODE);
+                if (textNode) {
+                    textNode.textContent = version ? `Download ${version} ` : 'Download ';
+                }
+                // Direct download if it's a file asset, otherwise open in new tab (already set)
+                if (asset) btn.setAttribute('download', '');
+            });
+        })
+        .catch(() => {
+            // No release yet — buttons already point to the releases page, nothing to do
+        });
+})();
+
 /* ── Accessibility: external links ── */
 document.querySelectorAll('a[target="_blank"]').forEach(link => {
     if (!link.hasAttribute('rel')) link.setAttribute('rel', 'noopener noreferrer');
 });
+
+/* ── Infinite ticker (JS-driven, no CSS reset hiccup) ── */
+(function () {
+    const track = document.querySelector('.ticker-track');
+    const firstInner = document.querySelector('.ticker-inner');
+    if (!track || !firstInner) return;
+
+    const SPEED = 40; // pixels per second
+    let position = 0;
+    let lastTime = null;
+
+    function animate(timestamp) {
+        if (lastTime === null) lastTime = timestamp;
+        const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // seconds, capped to avoid jump after tab switch
+        lastTime = timestamp;
+
+        const copyWidth = firstInner.offsetWidth;
+        position -= SPEED * dt;
+
+        // Wrap seamlessly: reset by exactly one copy width when we've scrolled that far
+        if (position <= -copyWidth) {
+            position += copyWidth;
+        }
+
+        track.style.transform = `translateX(${position}px)`;
+        requestAnimationFrame(animate);
+    }
+
+    requestAnimationFrame(animate);
+})();
